@@ -47,9 +47,28 @@ def model_files(path: str | Path, patterns: Sequence[str] = DEFAULT_PATTERNS) ->
     return sorted(found, key=lambda f: f.relative_to(root).as_posix())
 
 
+SNAPSHOT_ATTEMPTS = 5
+"""How many times ``digest_model`` retakes a snapshot a file vanished from."""
+
+
 def digest_model(path: str | Path, patterns: Sequence[str] = DEFAULT_PATTERNS) -> ModelDigest:
-    """Digest the model at ``path``."""
+    """Digest the model at ``path``.
+
+    A file that vanishes between enumeration and reading (an editor's atomic
+    save, a checkout) is a changed snapshot, not an error: the snapshot is
+    retaken. Only a file that keeps vanishing raises ``FileNotFoundError``.
+    """
     root = Path(path)
+    for attempt in range(1, SNAPSHOT_ATTEMPTS + 1):
+        try:
+            return _snapshot(root, patterns)
+        except FileNotFoundError:
+            if attempt == SNAPSHOT_ATTEMPTS:
+                raise
+    raise AssertionError("unreachable")
+
+
+def _snapshot(root: Path, patterns: Sequence[str]) -> ModelDigest:
     files = model_files(root, patterns)
     if not files:
         return ModelDigest(ABSENT, 0)

@@ -57,3 +57,37 @@ def test_custom_patterns(tmp_path: Path):
 
 def test_empty_directory_is_absent(tmp_path: Path):
     assert digest_model(tmp_path).digest == ABSENT
+
+
+def test_file_vanishing_mid_snapshot_is_a_changed_snapshot(tmp_path: Path, monkeypatch):
+    from airflow_provider_opensysml import digest
+
+    (tmp_path / "a.sysml").write_text("package A;")
+    (tmp_path / "b.sysml").write_text("package B;")
+    only_a = digest_model(tmp_path, ["a.sysml"])
+
+    real = digest.model_files
+    calls = 0
+
+    def enumerate_then_remove(path, patterns):
+        nonlocal calls
+        calls += 1
+        files = real(path, patterns)
+        if calls == 1:
+            (tmp_path / "b.sysml").unlink()
+        return files
+
+    monkeypatch.setattr(digest, "model_files", enumerate_then_remove)
+    assert digest_model(tmp_path) == only_a
+    assert calls == 2
+
+
+def test_file_that_keeps_vanishing_raises(tmp_path: Path, monkeypatch):
+    import pytest
+
+    from airflow_provider_opensysml import digest
+
+    (tmp_path / "a.sysml").write_text("package A;")
+    monkeypatch.setattr(digest, "model_files", lambda path, patterns: [tmp_path / "gone.sysml"])
+    with pytest.raises(FileNotFoundError):
+        digest_model(tmp_path)

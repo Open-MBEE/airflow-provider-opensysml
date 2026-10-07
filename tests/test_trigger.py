@@ -126,3 +126,11 @@ async def test_appearance_and_removal_are_changes(tmp_path: Path):
     assert events[0].payload["previous_digest"] == ABSENT
     assert events[0].payload["digest"].startswith("sha256:")
     assert events[1].payload["digest"] == ABSENT
+
+
+def test_empty_patterns_select_nothing(tmp_path: Path):
+    (tmp_path / "m.sysml").write_text("package M;")
+    trigger = SysMLModelChangedTrigger(path=str(tmp_path), patterns=[])
+    assert trigger.patterns == []
+    assert trigger.serialize()[1]["patterns"] == []
+    assert digest_model(tmp_path, trigger.patterns).digest == ABSENT

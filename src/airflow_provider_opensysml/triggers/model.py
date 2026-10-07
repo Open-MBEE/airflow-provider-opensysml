@@ -48,7 +48,7 @@ class SysMLModelChangedTrigger(BaseEventTrigger):
         if settle_interval < 0:
             raise ValueError(f"settle_interval must not be negative, not {settle_interval!r}")
         self.path = str(path)
-        self.patterns = list(patterns) if patterns else list(DEFAULT_PATTERNS)
+        self.patterns = list(DEFAULT_PATTERNS) if patterns is None else list(patterns)
         self.poll_interval = float(poll_interval)
         self.settle_interval = float(settle_interval)
 
