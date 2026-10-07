@@ -52,7 +52,9 @@ def lander_verification():
     @task
     def summarize(budget: dict, check: dict, **context) -> str:
         events = context["triggering_asset_events"]
-        changes = [e.extra.get("digest") for events_ in events.values() for e in events_]
+        changes = [
+            (e.extra.get("payload") or e.extra).get("digest") for events_ in events.values() for e in events_
+        ]
         lines = [f"model: {MODEL}", f"triggered by: {', '.join(c for c in changes if c) or 'manual run'}"]
         lines += [f"{name} = {value}" for name, value in budget["outputs"].items()]
         lines += [f"{v['case']}: {v['kind']}" for v in check["verifications"]]

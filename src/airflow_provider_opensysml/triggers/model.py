@@ -25,7 +25,8 @@ class SysMLModelChangedTrigger(BaseEventTrigger):
 
     The event payload names the ``path``, the new ``digest``, the
     ``previous_digest``, the number of ``files`` read and when the change was
-    ``observed_at``; Airflow records it as the asset event's ``extra``.
+    ``observed_at``; Airflow records it under ``payload`` in the asset event's
+    ``extra``.
 
     :param path: The model file or directory to watch
     :param patterns: Glob patterns selecting files under a directory

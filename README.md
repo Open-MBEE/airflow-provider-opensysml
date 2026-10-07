@@ -69,7 +69,8 @@ The watcher runs in the Airflow triggerer and polls every `poll_interval`
 seconds; a change is reported once the digest has held still for
 `settle_interval` seconds, so a save touching several files is one event. The
 event's `extra` carries the new and previous digest, the file count and when the
-change was observed. The baseline is taken when the triggerer starts the
+change was observed, under `extra["payload"]` as Airflow records trigger-fired
+events. The baseline is taken when the triggerer starts the
 watcher; nothing fires for the state the model is already in. The path is
 resolved where the DAG is parsed and must be visible to the triggerer under the
 same path.
