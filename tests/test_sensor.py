@@ -78,6 +78,11 @@ def test_defers_to_the_holds_trigger_when_not_yet_holding(answers):
     assert classpath.endswith("SysMLRequirementHoldsTrigger")
     assert kwargs["model_path"] == "/m/t.sysml" and kwargs["opensysml_conn_id"] == "svc"
     assert kwargs["question"]["element"] == "R" and kwargs["poll_interval"] == 0.01
+    assert kwargs["fail_on_undecided"] is True
+    answers.append(FALSE)
+    with pytest.raises(TaskDeferred) as lenient:
+        sensor(deferrable=True, fail_on_undecided=False).execute({})
+    assert lenient.value.trigger.serialize()[1]["fail_on_undecided"] is False
     assert kwargs["settle_interval"] == 0.5
 
 

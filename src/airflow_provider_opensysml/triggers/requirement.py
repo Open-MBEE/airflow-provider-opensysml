@@ -86,7 +86,8 @@ class SysMLRequirementHoldsTrigger(_QuestionWatch, BaseTrigger):
 
     Fires one event: ``{"holds": True, "report": ...}`` when the answer holds, or
     ``{"holds": False, "error": ...}`` when it could not be decided. An answer that
-    does not hold keeps waiting for the model to change.
+    does not hold keeps waiting for the model to change; so does an undecided one
+    when ``fail_on_undecided`` is off.
 
     :param model_path: The model file or directory, loaded through the hook and watched for changes
     :param question: The :class:`SysMLQuestion` as keyword arguments
@@ -95,23 +96,34 @@ class SysMLRequirementHoldsTrigger(_QuestionWatch, BaseTrigger):
     :param patterns: Glob patterns selecting files under a directory
     :param poll_interval: Seconds between digests of the model
     :param settle_interval: Seconds a change must hold still before the model is re-asked
+    :param fail_on_undecided: End with an error event when the model cannot decide the question
     """
+
+    def __init__(self, *args: Any, fail_on_undecided: bool = True, **kwargs: Any) -> None:
+        super().__init__(*args, **kwargs)
+        self.fail_on_undecided = fail_on_undecided
 
     def serialize(self) -> tuple[str, dict[str, Any]]:
         return (
             "airflow_provider_opensysml.triggers.requirement.SysMLRequirementHoldsTrigger",
-            self._kwargs(),
+            {**self._kwargs(), "fail_on_undecided": self.fail_on_undecided},
         )
+
+    def _waits(self, answer: Answer) -> bool:
+        if answer.holds:
+            return False
+        return answer.decided or not self.fail_on_undecided
 
     async def run(self) -> AsyncIterator[TriggerEvent]:
         watch = self._watch()
         digest = await watch.start()
         answer = await self._ask()
         changes = watch.changes()
-        while answer.decided and not answer.holds:
+        while self._waits(answer):
             self.log.info(
-                "%s does not hold of %s (%s); waiting for the model to change",
+                "%s %s of %s (%s); waiting for the model to change",
                 self.question,
+                "does not hold" if answer.decided else f"is undecided ({answer.error})",
                 self.model_path,
                 digest.digest,
             )

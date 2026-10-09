@@ -92,6 +92,22 @@ async def test_holds_trigger_reports_an_undecided_answer(tmp_path: Path, answers
 
 
 @pytest.mark.asyncio
+async def test_holds_trigger_waits_through_an_undecided_answer_when_told_to(tmp_path: Path, answers):
+    model = tmp_path / "m.sysml"
+    model.write_text("odd")
+    answers.update(odd=UNDECIDED, good=HOLDS)
+    trigger = SysMLRequirementHoldsTrigger(
+        model_path=str(model), question=QUESTION, fail_on_undecided=False, **FAST
+    )
+    assert trigger.serialize()[1]["fail_on_undecided"] is False
+    task = asyncio.ensure_future(edit(model, "good"))
+    event = await next_event(trigger)
+    await task
+    assert event.payload["holds"] is True
+    assert answers["asked"] == ["odd", "good"]
+
+
+@pytest.mark.asyncio
 async def test_satisfied_trigger_fires_on_false_to_true_only(tmp_path: Path, answers):
     model = tmp_path / "m.sysml"
     model.write_text("bad")

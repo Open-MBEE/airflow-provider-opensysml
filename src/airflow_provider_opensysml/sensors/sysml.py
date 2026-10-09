@@ -133,6 +133,7 @@ class SysMLRequirementSensor(BaseSensorOperator):
                 patterns=self.patterns,
                 poll_interval=self.poke_interval,
                 settle_interval=self.settle_interval,
+                fail_on_undecided=self.fail_on_undecided,
             ),
             method_name="execute_complete",
         )
