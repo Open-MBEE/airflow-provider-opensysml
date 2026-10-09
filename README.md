@@ -111,8 +111,8 @@ from airflow_provider_opensysml.sensors import SysMLRequirementSensor
 reserve_held = SysMLRequirementSensor(
     task_id="reserve_held",
     model_path=MODEL,
-    element="Descent::scoutLandsSoftly",   # kind="requirement" by default
-    deferrable=True,                       # wait in the triggerer, not a worker slot
+    element="Descent::scoutLandsSoftly",  # kind="requirement" by default
+    deferrable=True,  # wait in the triggerer, not a worker slot
     poke_interval=60,
     timeout=6 * 3600,
 )

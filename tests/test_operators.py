@@ -11,7 +11,6 @@ from pathlib import Path
 
 import pytest
 from airflow.sdk.exceptions import AirflowException
-from opensysml.errors import OpenSysMLError
 
 from airflow_provider_opensysml.hooks import OpenSysMLHook
 from airflow_provider_opensysml.operators import SysMLAnalysisOperator, SysMLVerifyOperator
@@ -80,9 +79,9 @@ def test_false_answer_fails_the_task(lander: Path, lander_source: str):
     assert report["verdicts"][0]["holds"] is False
 
 
-def test_unknown_case_fails_with_the_clients_error(lander: Path):
+def test_unknown_case_is_undecided_and_fails_with_the_clients_message(lander: Path):
     op = SysMLAnalysisOperator(task_id="nope", model_path=str(lander), case="Descent::noSuchCase")
-    with pytest.raises(OpenSysMLError, match="noSuchCase"):
+    with pytest.raises(AirflowException, match="could not be decided.*noSuchCase"):
         op.execute({})
 
 

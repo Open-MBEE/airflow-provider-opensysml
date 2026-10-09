@@ -13,6 +13,17 @@ from __future__ import annotations
 from dataclasses import asdict, dataclass, field
 from typing import TYPE_CHECKING, Any
 
+from opensysml.errors import (
+    ExecutionError,
+    FeatureValueError,
+    InstanceTypeError,
+    InvalidRequestError,
+    ModelError,
+    SymbolNotFoundError,
+    TypeMismatchError,
+    UnsupportedValueError,
+)
+
 from airflow_provider_opensysml.results import analysis_result_to_dict, verdict_to_dict
 
 if TYPE_CHECKING:
@@ -20,6 +31,20 @@ if TYPE_CHECKING:
 
 VERIFY_KINDS: tuple[str, ...] = ("constraint", "requirement", "satisfy", "object")
 QUESTION_KINDS: tuple[str, ...] = (*VERIFY_KINDS, "case")
+
+
+# Errors that mean the model cannot answer this question (unknown element, wrong kind, bad
+# arguments). Connection and service errors are the caller's to retry and pass through.
+UNDECIDABLE = (
+    SymbolNotFoundError,
+    ExecutionError,
+    ModelError,
+    TypeMismatchError,
+    InstanceTypeError,
+    FeatureValueError,
+    UnsupportedValueError,
+    InvalidRequestError,
+)
 
 
 @dataclass
@@ -85,9 +110,13 @@ class SysMLQuestion:
         return asdict(self)
 
     def ask(self, model: Model) -> Answer:
-        if self.kind == "case":
-            return self._run_case(model)
-        return self._verify(model)
+        """Answer the question of ``model``; a question the model cannot take is undecided, not raised."""
+        try:
+            if self.kind == "case":
+                return self._run_case(model)
+            return self._verify(model)
+        except UNDECIDABLE as exc:
+            return Answer(False, {}, error=f"{self} could not be decided: {exc}")
 
     def _verify(self, model: Model) -> Answer:
         if self.kind == "constraint":

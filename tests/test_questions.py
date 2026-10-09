@@ -141,3 +141,23 @@ def test_case_failures_and_errors():
     broken = analysis([verdict(kind="objective", element="obj", holds=False, error="no solver")])
     answer = SysMLQuestion("case", "V::check").ask(FakeModel(run_analysis=broken))
     assert answer.error == "V::check: objective obj could not be decided: no solver"
+
+
+def test_a_question_the_model_cannot_take_is_undecided_not_raised():
+    from opensysml.errors import ConnectionError as OpenSysMLConnectionError
+    from opensysml.errors import SymbolNotFoundError
+
+    class Refusing(FakeModel):
+        def verify_requirement(self, *args, **kwargs):
+            raise SymbolNotFoundError("R::missing")
+
+    answer = SysMLQuestion("requirement", "R::missing").ask(Refusing())
+    assert not answer.decided and not answer.holds
+    assert "requirement R::missing could not be decided" in answer.error and "R::missing" in answer.error
+
+    class Unreachable(FakeModel):
+        def verify_requirement(self, *args, **kwargs):
+            raise OpenSysMLConnectionError("service gone")
+
+    with pytest.raises(OpenSysMLConnectionError):
+        SysMLQuestion("requirement", "R::x").ask(Unreachable())
