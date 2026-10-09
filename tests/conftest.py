@@ -5,7 +5,7 @@ from pathlib import Path
 
 import pytest
 
-MODEL = Path(__file__).parent.parent / "example_dags" / "models" / "lander.sysml"
+MODEL = Path(__file__).parent.parent / "example_dags" / "lander_verification" / "lander.sysml"
 
 
 @pytest.fixture

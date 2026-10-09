@@ -16,7 +16,7 @@ def test_example_dag_imports_and_schedules_on_the_model():
     assert set(dag.task_ids) == {"fuel_budget", "soft_landing", "touchdown_check", "summarize"}
     (asset,) = dag.timetable.asset_condition.objects
     assert asset.name == "lander_model"
-    assert asset.uri.endswith("/example_dags/models/lander.sysml")
+    assert asset.uri.endswith("/example_dags/lander_verification/lander.sysml")
     assert asset.watchers[0].trigger.serialize()[0].endswith("SysMLModelChangedTrigger")
 
 
@@ -29,6 +29,9 @@ def test_terrain_example_dag_is_generated_from_the_model():
     assert edges_of(dag) == TIG_EDGES
     correlate_right = dag.get_task("correlate_right")
     assert correlate_right.image == "tig-worker:latest"
+    env = {var.name: var.value for var in correlate_right.env_vars}
+    assert env["AWS_ACCESS_KEY_ID"] == "{{ var.value.tig_s3_access_key }}"
+    assert env["AWS_SECRET_ACCESS_KEY"] == "{{ var.value.tig_s3_secret_key }}"
     assert correlate_right.container_resources.limits == {"cpu": "2", "memory": "4Gi"}
     assert correlate_right.arguments[:3] == [
         "/opt/wrappers/correlate_wrapper.sh",

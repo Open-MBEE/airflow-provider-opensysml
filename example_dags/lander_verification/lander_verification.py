@@ -1,6 +1,6 @@
 """Verify the lander model whenever it changes.
 
-The model under ``models/`` is the ``analysis-demo`` lander from OpenSysML. The
+``lander.sysml`` in this directory is the ``analysis-demo`` lander from OpenSysML. The
 DAG is scheduled on the asset :func:`sysml_model_asset` builds for it, so a
 save, a checkout or a copy over the file starts a run that runs the fuel budget
 analysis, verifies the soft-landing requirement and runs the verification case
@@ -19,7 +19,7 @@ from airflow.sdk import dag, task
 from airflow_provider_opensysml.assets import sysml_model_asset
 from airflow_provider_opensysml.operators import SysMLAnalysisOperator, SysMLVerifyOperator
 
-MODEL = os.environ.get("OPENSYSML_EXAMPLE_MODEL") or str(Path(__file__).parent / "models" / "lander.sysml")
+MODEL = os.environ.get("OPENSYSML_EXAMPLE_MODEL") or str(Path(__file__).parent / "lander.sysml")
 
 lander = sysml_model_asset(MODEL, name="lander_model", poll_interval=15)
 
