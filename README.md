@@ -11,6 +11,10 @@ Airflow **asset**, and its analysis and verification cases are **tasks**:
   included) and `SysMLVerifyOperator` asks whether a constraint, requirement,
   satisfaction or object holds. Both return the answer as plain data for XCom
   and fail the task when the model answers false.
+- `SysMLRequirementSensor` waits until a requirement holds, deferring to a
+  trigger that re-asks when the model changes; `sysml_requirement_asset` is an
+  asset updated each time a requirement becomes satisfied, and `SysMLActionDag`
+  turns the model's `satisfy ... by <step>` statements into gates before its steps.
 - `OpenSysMLHook` reaches the `sysml-grpc` service through the `opensysml`
   client — an externally managed one named by an Airflow connection, or a
   private one started for the task.
@@ -93,6 +97,71 @@ could not decide raises the client's error.
 the client's questions — `constraint`, `requirement`, `satisfy` or `object` —
 and returns the verdict.
 
+### Waiting on a requirement
+
+A task can be held back until a requirement of the model holds, and released the
+moment it does. `SysMLRequirementSensor` asks the same question `SysMLVerifyOperator`
+does — a `requirement`, `constraint`, `satisfy` or `object` check, or a `case` run
+with arguments bound to its `in` parameters — and succeeds once the answer holds, with
+the answer as its XCom value:
+
+```python
+from airflow_provider_opensysml.sensors import SysMLRequirementSensor
+
+reserve_held = SysMLRequirementSensor(
+    task_id="reserve_held",
+    model_path=MODEL,
+    element="Descent::scoutLandsSoftly",   # kind="requirement" by default
+    deferrable=True,                       # wait in the triggerer, not a worker slot
+    poke_interval=60,
+    timeout=6 * 3600,
+)
+reserve_held >> land
+```
+
+Deferred, the sensor hands the wait to `SysMLRequirementHoldsTrigger`, which re-asks
+only when the model's files change (the same digest watch as the asset) rather than
+on a clock. An answer the model cannot decide — an unknown element, an unbound
+parameter — fails the sensor; set `fail_on_undecided=False` to keep waiting instead.
+
+A requirement can only come to hold when something it is evaluated over changes: the
+model's files, or the values bound to a case's `in` parameters. The latter is how a
+run's own facts reach the model without being written into it — `named_arguments` is
+templated, so run configuration flows in:
+
+```python
+pair_matches = SysMLRequirementSensor(
+    task_id="pair_matches",
+    model_path=MODEL,
+    kind="case",
+    element="TerrainNCAM::Verification::stereoPairCheck",
+    named_arguments={
+        "leftAcquisition": "{{ acquisition(dag_run.conf['left_key']) }}",
+        "rightAcquisition": "{{ acquisition(dag_run.conf['right_key']) }}",
+        "leftEye": "{{ eye(dag_run.conf['left_key']) }}",
+        "rightEye": "{{ eye(dag_run.conf['right_key']) }}",
+    },
+)
+```
+
+`VerifyRequirement` itself takes no bindings, so a requirement that depends on a run's
+values is stated with `in` parameters and run through a verification case (see
+`StereoPairCheck` in `example_dags/models/terrain_ncam.sysml`). A fact outside the model
+altogether — a product landing in an object store — is still a job for an ordinary
+Airflow sensor, or for a case it is bound into.
+
+To start a whole DAG as soon as a requirement is met, schedule it on
+`sysml_requirement_asset`: its watcher, `SysMLRequirementSatisfiedTrigger`, asks the
+question at each change of the model's files and emits one asset event each time the
+answer turns from not holding to holding — never for a model that goes on holding it:
+
+```python
+from airflow_provider_opensysml.assets import sysml_requirement_asset
+
+with DAG(dag_id="land", schedule=[sysml_requirement_asset(MODEL, "Descent::scoutLandsSoftly")]):
+    ...
+```
+
 ### The connection
 
 An `opensysml` connection names a `sysml-grpc` service by `host` and `port`.
@@ -166,6 +235,34 @@ The pods need the `apache-airflow-providers-cncf-kubernetes` provider
 (`pip install "airflow-provider-opensysml[kubernetes]"`), a cluster with TIG's
 `tig-worker` image, `vicar-wrappers` config map and calibration volume, and the
 S3 credentials in the `tig_s3_access_key`/`tig_s3_secret_key` variables.
+
+### Gates from the model
+
+The model also says which step answers for each requirement, with ordinary
+`satisfy` statements:
+
+```sysml
+satisfy correlateLeftCpu by ncamWorker.terrain.correlate_left;
+satisfy eyesFitTogether by ncamWorker;
+```
+
+`SysMLActionDag` turns each into a gate: a `SysMLRequirementSensor` task
+(`require_TN-3`) upstream of the step it names, or of every first step when the
+satisfying element is the worker or the pipeline itself, released once the requirement
+holds. `from_model(..., gates=True)` reads them from the model; from a file, pass
+`gates=load_gates("models/terrain_ncam.gates.json")` and a `RequirementGateFactory`:
+
+```python
+gates = RequirementGateFactory(MODEL, deferrable=True, poke_interval=30, timeout=3600)
+terrain = SysMLActionDag.from_file(GRAPHS, task_factory=pods, gates=load_gates(GATES), gate_factory=gates)
+```
+
+The example DAG does this for TN-1..TN-10 and, for TN-12 (this run's stereo pair),
+adds a `case` sensor bound from `dag_run.conf` before either eye is correlated. The
+same model renders the pipeline description —
+`sysml example_dags/models/terrain_ncam.sysml -render-document TerrainNCAM::Report::TerrainReport -doc-form html -o terrain.html`
+— with the step and product tables, the flow diagram, the requirement text and the
+traceability matrix.
 
 ### Until the next OpenSysML release
 

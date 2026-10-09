@@ -5,15 +5,20 @@ from datetime import datetime
 from pathlib import Path
 
 import pytest
+from airflow.providers.standard.operators.empty import EmptyOperator
 from airflow.sdk import DAG
 
 from airflow_provider_opensysml.dag import (
     ActionStep,
     KubernetesPodFactory,
+    RequirementGate,
+    RequirementGateFactory,
     SysMLActionDag,
     conf_arguments,
     empty_task_factory,
+    gate_task_id,
     literal,
+    load_gates,
     load_graphs,
 )
 
@@ -279,3 +284,60 @@ def test_kubernetes_pod_factory_needs_image_and_wrapper():
     with DAG("pods", start_date=datetime(2026, 1, 1), schedule=None) as dag:
         with pytest.raises(ValueError, match="image"):
             KubernetesPodFactory()(step, dag)
+
+
+# --- Requirement gates ---------------------------------------------------------
+
+GATES = GRAPHS.with_name("terrain_ncam.gates.json")
+
+
+def test_gates_hold_back_the_step_they_name_or_the_first_steps():
+    gates = load_gates(GATES)
+    assert {g.label for g in gates} >= {"TN-1", "TN-3", "TN-8", "TN-9", "TN-10"}
+    tn3 = next(g for g in gates if g.short_name == "TN-3")
+    assert tn3.requirement == "TerrainNCAM::Requirements::correlateLeftCpu"
+    assert tn3.satisfying_feature == "TerrainNCAM::Pipeline::Terrain::correlate_left"
+    assert RequirementGate.from_dict(tn3.as_dict()) == tn3
+
+    built: list[RequirementGate] = []
+
+    def gate_factory(gate: RequirementGate, dag: DAG):
+        built.append(gate)
+        return EmptyOperator(task_id=gate_task_id(gate), dag=dag)
+
+    terrain = SysMLActionDag.from_file(
+        GRAPHS, task_factory=empty_task_factory, gates=gates, gate_factory=gate_factory
+    )
+    assert terrain.first_steps == ["rad_left", "rad_right"]
+    assert terrain.gated_steps(tn3) == ["correlate_left"]
+    tn9 = next(g for g in gates if g.short_name == "TN-9")
+    assert terrain.gated_steps(tn9) == ["rad_left", "rad_right"]
+
+    dag = terrain.dag("gated", start_date=datetime(2026, 1, 1), schedule=None)
+    assert built == gates
+    edges = edges_of(dag)
+    assert TIG_EDGES <= edges
+    assert ("require_TN-3", "correlate_left") in edges
+    assert ("require_TN-9", "rad_left") in edges and ("require_TN-9", "rad_right") in edges
+    assert ("require_TN-10", "rad_left") in edges
+    assert {e for e in edges if e[0] == "require_TN-7"} == {("require_TN-7", "mesh_left")}
+
+
+def test_gates_need_a_factory():
+    gate = RequirementGate("R::x", "TerrainNCAM::Pipeline::Terrain::rad_left", "X-1")
+    terrain = SysMLActionDag.from_file(GRAPHS, task_factory=empty_task_factory, gates=[gate])
+    with pytest.raises(ValueError, match="gate_factory"):
+        terrain.dag("ungated", start_date=datetime(2026, 1, 1), schedule=None)
+
+
+def test_requirement_gate_factory_builds_a_sensor():
+    from airflow_provider_opensysml.sensors import SysMLRequirementSensor
+
+    gate = RequirementGate("R::x", "TerrainNCAM::Pipeline::Terrain::rad_left", "X 1")
+    factory = RequirementGateFactory("/m/t.sysml", deferrable=True, poke_interval=5, opensysml_conn_id="svc")
+    with DAG("g", start_date=datetime(2026, 1, 1), schedule=None) as dag:
+        sensor = factory(gate, dag)
+    assert isinstance(sensor, SysMLRequirementSensor)
+    assert sensor.task_id == "require_X_1"
+    assert sensor.model_path == "/m/t.sysml" and sensor.element == "R::x" and sensor.kind == "requirement"
+    assert sensor.deferrable is True and sensor.poke_interval == 5 and sensor.opensysml_conn_id == "svc"

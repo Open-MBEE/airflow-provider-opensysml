@@ -25,8 +25,22 @@ def test_terrain_example_dag_is_generated_from_the_model():
     assert bag.import_errors == {}
     dag = bag.dags["opensysml_terrain_ncam"]
     assert type(dag.timetable).__name__ == "NullTimetable"
-    assert set(dag.task_ids) == TIG_TASKS
-    assert edges_of(dag) == TIG_EDGES
+    gates = {f"require_TN-{n}" for n in range(1, 11)} | {"require_TN-12"}
+    assert set(dag.task_ids) == TIG_TASKS | gates
+    edges = edges_of(dag)
+    assert {e for e in edges if not e[0].startswith("require_")} == TIG_EDGES
+    assert ("require_TN-3", "correlate_left") in edges and ("require_TN-7", "mesh_left") in edges
+    assert ("require_TN-9", "rad_left") in edges and ("require_TN-9", "rad_right") in edges
+    assert {e[1] for e in edges if e[0] == "require_TN-12"} == {"correlate_left", "correlate_right"}
+    stereo = dag.get_task("require_TN-12")
+    assert stereo.kind == "case" and stereo.element == "TerrainNCAM::Verification::stereoPairCheck"
+    assert stereo.named_arguments["leftEye"] == "{{ eye(dag_run.conf['left_key']) }}"
+    macros = dag.user_defined_macros
+    key = "input/NLM_1835_0829848458_777FDR_N0874924NCAM00230_0A02LLJ01.VIC"
+    assert macros["eye"](key) == "L" and macros["eye"](key.replace("NLM", "NRM")) == "R"
+    assert macros["acquisition"](key) == macros["acquisition"](key.replace("NLM", "NRM"))
+    assert macros["acquisition"](key) == "1835_0829848458_777_N0874924NCAM00230_0A02LLJ01"
+    assert dag.get_task("require_TN-3").element == "TerrainNCAM::Requirements::correlateLeftCpu"
     correlate_right = dag.get_task("correlate_right")
     assert correlate_right.image == "tig-worker:latest"
     assert correlate_right.container_resources.limits == {"cpu": "2", "memory": "4Gi"}

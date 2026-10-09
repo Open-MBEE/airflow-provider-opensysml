@@ -236,6 +236,36 @@ package TerrainNCAM {
         requirement <'TN-11'> correlateConsumesBothEyes {
             doc /* A correlate step consumes the RAS of both eyes, its own first; it cannot start before both radiometric steps finish. Structural: the two RAS pins of Correlate and the rasReady join of Terrain. */
         }
+
+        /* Which element answers for each requirement. The Airflow provider reads these
+         * and gates the named step on its requirement: a satisfaction by a step waits
+         * before that step, one by the worker before the first steps. */
+        satisfy radLeftCpu by ncamWorker.terrain.rad_left;
+        satisfy radRightCpu by ncamWorker.terrain.rad_right;
+        satisfy correlateLeftCpu by ncamWorker.terrain.correlate_left;
+        satisfy correlateRightCpu by ncamWorker.terrain.correlate_right;
+        satisfy xyzLeftCpu by ncamWorker.terrain.xyz_left;
+        satisfy xyzRightCpu by ncamWorker.terrain.xyz_right;
+        satisfy meshLeftCpu by ncamWorker.terrain.mesh_left;
+        satisfy meshRightCpu by ncamWorker.terrain.mesh_right;
+        satisfy eyesFitTogether by ncamWorker;
+        satisfy sharedRasBasename by eyeProducts;
+
+        /* A run's stereo pair: both FDRs of one acquisition, a left and a right eye.
+         * The keys of a run are not in the model; they are bound when the case runs. */
+        requirement def StereoPairMatches {
+            doc /* The left and right FDR of a run come from the same acquisition and are
+                 * the left (L) and right (R) eye of it. */
+            subject run : Pipeline::Terrain;
+            in attribute leftAcquisition : String;
+            in attribute rightAcquisition : String;
+            in attribute leftEye : String;
+            in attribute rightEye : String;
+            require constraint {
+                leftAcquisition == rightAcquisition and leftEye == "L" and rightEye == "R"
+            }
+        }
+        requirement <'TN-12'> stereoPairMatches : StereoPairMatches { subject run = ncamWorker.terrain; }
     }
 
     package Verification {
@@ -302,6 +332,29 @@ package TerrainNCAM {
             VerificationCases::PassIf(p.mesh.productType == "RAS" and p.mesh.venue == "M" and p.xym.venue == "M")
         }
         verification basenameCheck : BasenameCheck { subject p = eyeProducts; }
+
+        /* Run with a run's values bound to its in parameters:
+         *   sysml terrain_ncam.sysml -analysis "TerrainNCAM::Verification::stereoPairCheck(
+         *       leftAcquisition = \"1835_0829848458_777\", rightAcquisition = \"1835_0829848458_777\",
+         *       leftEye = \"L\", rightEye = \"R\")" */
+        verification def StereoPairCheck {
+            subject run : Pipeline::Terrain;
+            in attribute leftAcquisition : String;
+            in attribute rightAcquisition : String;
+            in attribute leftEye : String;
+            in attribute rightEye : String;
+            objective : StereoPairMatches {
+                subject :>> run;
+                in leftAcquisition = leftAcquisition;
+                in rightAcquisition = rightAcquisition;
+                in leftEye = leftEye;
+                in rightEye = rightEye;
+            }
+            VerificationCases::PassIf(
+                leftAcquisition == rightAcquisition and leftEye == "L" and rightEye == "R"
+            )
+        }
+        verification stereoPairCheck : StereoPairCheck { subject run = ncamWorker.terrain; }
     }
 
     package Report {
@@ -374,6 +427,18 @@ package TerrainNCAM {
                     attribute redefines caption = "Both eyes are corrected in parallel; every later step of an eye waits for both RAS products";
                     attribute redefines direction = "LR";
                     ref redefines source = terrainFlow;
+                }
+            }
+            part runtime : Section {
+                attribute redefines title = "What a run supplies";
+                part text : Paragraph {
+                    attribute redefines text = "The model is the pipeline type. A run adds its bucket, its left and right FDR keys and its run id as Airflow run configuration; the keys of every later product are derived from them by the M20 filename convention. Requirement TN-12 is checked with those values bound to the in parameters of verification case stereoPairCheck before either eye is correlated.";
+                }
+            }
+            part gates : Section {
+                attribute redefines title = "Gates";
+                part text : Paragraph {
+                    attribute redefines text = "Each satisfy statement names the step that answers for a requirement. The generated DAG waits before that step until the requirement holds of the model; a requirement satisfied by the worker as a whole holds back the first steps.";
                 }
             }
             part traceability : Section {
