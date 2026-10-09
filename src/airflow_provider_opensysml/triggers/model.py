@@ -63,39 +63,61 @@ class SysMLModelChangedTrigger(BaseEventTrigger):
             },
         )
 
-    async def _digest(self) -> ModelDigest:
-        return await asyncio.to_thread(digest_model, self.path, self.patterns)
-
-    async def _settled(self, changed: ModelDigest) -> ModelDigest:
-        """Re-digest until the model holds still, and return what it settled on."""
-        while True:
-            await asyncio.sleep(self.settle_interval)
-            again = await self._digest()
-            if again == changed:
-                return again
-            changed = again
-
     async def run(self) -> AsyncIterator[TriggerEvent]:
-        last = await self._digest()
+        watch = ModelWatch(self.path, self.patterns, self.poll_interval, self.settle_interval)
+        last = await watch.start()
         self.log.info("Watching %s (%d file(s), %s)", self.path, last.files, last.digest)
-        while True:
-            await asyncio.sleep(self.poll_interval)
-            current = await self._digest()
-            if current.digest == last.digest:
-                continue
-            current = await self._settled(current)
-            if current.digest == last.digest:
-                continue
+        async for previous, current in watch.changes():
             self.log.info(
-                "%s changed: %s -> %s (%d file(s))", self.path, last.digest, current.digest, current.files
+                "%s changed: %s -> %s (%d file(s))", self.path, previous.digest, current.digest, current.files
             )
             yield TriggerEvent(
                 {
                     "path": self.path,
                     "digest": current.digest,
-                    "previous_digest": last.digest,
+                    "previous_digest": previous.digest,
                     "files": current.files,
                     "observed_at": datetime.now(timezone.utc).isoformat(),
                 }
             )
-            last = current
+
+
+class ModelWatch:
+    """Poll a model's digest and report each settled change as ``(previous, current)``."""
+
+    def __init__(self, path: str, patterns: Sequence[str], poll_interval: float, settle_interval: float):
+        self.path = path
+        self.patterns = list(patterns)
+        self.poll_interval = poll_interval
+        self.settle_interval = settle_interval
+        self.last: ModelDigest | None = None
+
+    async def digest(self) -> ModelDigest:
+        return await asyncio.to_thread(digest_model, self.path, self.patterns)
+
+    async def start(self) -> ModelDigest:
+        """Take the baseline: what the model is now, which no change is reported for."""
+        self.last = await self.digest()
+        return self.last
+
+    async def _settled(self, changed: ModelDigest) -> ModelDigest:
+        """Re-digest until the model holds still, and return what it settled on."""
+        while True:
+            await asyncio.sleep(self.settle_interval)
+            again = await self.digest()
+            if again == changed:
+                return again
+            changed = again
+
+    async def changes(self) -> AsyncIterator[tuple[ModelDigest, ModelDigest]]:
+        last = self.last if self.last is not None else await self.start()
+        while True:
+            await asyncio.sleep(self.poll_interval)
+            current = await self.digest()
+            if current.digest == last.digest:
+                continue
+            current = await self._settled(current)
+            if current.digest == last.digest:
+                continue
+            yield last, current
+            last = self.last = current
