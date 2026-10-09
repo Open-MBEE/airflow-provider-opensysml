@@ -18,14 +18,35 @@ jobs:
         with:
           python-version: ${{ matrix.python-version }}
           cache: pip
+      - uses: actions/setup-go@v5
+        with:
+          go-version: "1.25"
+      # Graph export (sysml -graphs, Model.export_graphs) is on OpenSysML develop
+      # and not yet in a released opensysml wheel: build the service and install
+      # the client from that checkout until the next release.
+      - name: Build OpenSysML develop
+        run: |
+          git clone --depth 1 --branch develop https://github.com/Open-MBEE/OpenSysML.git "$RUNNER_TEMP/OpenSysML"
+          cd "$RUNNER_TEMP/OpenSysML"
+          go build -o bin/sysml ./cmd/sysml
+          go build -o bin/sysml-grpc ./cmd/sysml-grpc
+          echo "OPENSYSML_BINARY=$RUNNER_TEMP/OpenSysML/bin/sysml-grpc" >> "$GITHUB_ENV"
+          echo "$RUNNER_TEMP/OpenSysML/bin" >> "$GITHUB_PATH"
       - name: Install
         run: |
           python -m pip install --upgrade pip
+          pip install -e "$RUNNER_TEMP/OpenSysML/client/python"
           pip install -e ".[dev]"
       - name: Lint
         run: ruff check . && ruff format --check .
+      - name: Model checks
+        run: |
+          sysml example_dags/models/terrain_ncam.sysml
+          sysml -satisfy example_dags/models/terrain_ncam.sysml
+          sysml example_dags/models/terrain_ncam.sysml -graphs TerrainNCAM::Pipeline::Terrain -o "$RUNNER_TEMP/graphs.json"
+          python -c "import json,sys; a=json.load(open(sys.argv[1])); b=json.load(open(sys.argv[2])); assert a['subject']==b['subject'] and len(a['actions'])==len(b['actions'])" "$RUNNER_TEMP/graphs.json" example_dags/models/terrain_ncam.graphs.json
+          sysml example_dags/models/terrain_ncam.sysml -render-document TerrainNCAM::Report::TerrainReport -doc-form html -o "$RUNNER_TEMP/terrain.html"
       - name: Unit tests
         run: pytest -m "not integration"
       - name: Integration tests
-        # The opensysml client downloads the sysml-grpc release it pins on first use.
         run: pytest -m integration
