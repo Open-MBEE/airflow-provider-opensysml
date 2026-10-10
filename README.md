@@ -33,6 +33,19 @@ describes: `$OPENSYSML_BINARY`, then its cache, then a download of the release i
 pins. Point `OPENSYSML_BINARY` at a build, or set up an `opensysml` connection
 naming a running service, to avoid the download on workers.
 
+## Examples
+
+Each example under `example_dags/` is a directory holding its DAG and the model
+it works on, so one can be copied out and used on its own:
+
+- `example_dags/lander_verification/`: `lander_verification.py` verifies
+  `lander.sysml` whenever the file changes, with `sysml_model_asset`,
+  `SysMLAnalysisOperator` and `SysMLVerifyOperator` ([below](#a-dag-over-a-model)).
+- `example_dags/terrain_ncam/`: `terrain_ncam.py` is generated with
+  `SysMLActionDag` from `terrain_ncam.sysml`, the TIG terrain pipeline as a SysML
+  action, via its checked-in `graphs:1` export `terrain_ncam.graphs.json`
+  ([below](#a-dag-generated-from-a-model)).
+
 ## A DAG over a model
 
 ```python
@@ -58,7 +71,7 @@ def lander_verification():
 lander_verification()
 ```
 
-`example_dags/lander_verification.py` is this DAG over the lander model from
+`example_dags/lander_verification/` is this DAG over the lander model from
 OpenSysML's `analysis-demo`, with a summary task reading the asset event that
 triggered the run.
 
@@ -146,7 +159,7 @@ pair_matches = SysMLRequirementSensor(
 
 `VerifyRequirement` itself takes no bindings, so a requirement that depends on a run's
 values is stated with `in` parameters and run through a verification case (see
-`StereoPairCheck` in `example_dags/models/terrain_ncam.sysml`). A fact outside the model
+`StereoPairCheck` in `example_dags/terrain_ncam/terrain_ncam.sysml`). A fact outside the model
 altogether — a product landing in an object store — is still a job for an ordinary
 Airflow sensor, or for a case it is bound into.
 
@@ -191,23 +204,23 @@ tasks and `>>` dependencies:
   subject action's own (a pipeline-wide `image`). Anything else, down to an
   `EmptyOperator`, is one function `(ActionStep, DAG) -> BaseOperator`.
 
-`example_dags/models/terrain_ncam.sysml` models the
+`example_dags/terrain_ncam/terrain_ncam.sysml` models the
 [TIG](https://github.com/NASA-AMMOS/tig) M2020 NCAM terrain pipeline this way:
 `part def`s for the FDR, RAS, DSP, XYM and mesh products with the M20 filename
 fields, `action def`s for the four VICAR steps with typed `in`/`out` pins and
 the wrapper, cpu, memory and OpenMP thread count each pod needs, an
 `action def Terrain` composing them with typed flows, successions and fork/join
 over the two eyes, requirements with verification cases, and a DocGen report.
-`example_dags/terrain_ncam.py` builds the DAG from its export and reproduces the
+`example_dags/terrain_ncam/terrain_ncam.py` builds the DAG from its export and reproduces the
 eight tasks and eight edges of TIG's hand-written `ids_terrain_ncam.py`; the
 keys, bucket and run id of a run are not in the model but in `dag_run.conf`.
 
 ```sh
-sysml example_dags/models/terrain_ncam.sysml                                   # loads clean
-sysml -satisfy example_dags/models/terrain_ncam.sysml                          # the requirements hold
-sysml example_dags/models/terrain_ncam.sysml -graphs TerrainNCAM::Pipeline::Terrain \
-      -o example_dags/models/terrain_ncam.graphs.json                          # the graph the DAG is built from
-sysml example_dags/models/terrain_ncam.sysml \
+sysml example_dags/terrain_ncam/terrain_ncam.sysml                                   # loads clean
+sysml -satisfy example_dags/terrain_ncam/terrain_ncam.sysml                          # the requirements hold
+sysml example_dags/terrain_ncam/terrain_ncam.sysml -graphs TerrainNCAM::Pipeline::Terrain \
+      -o example_dags/terrain_ncam/terrain_ncam.graphs.json                          # the graph the DAG is built from
+sysml example_dags/terrain_ncam/terrain_ncam.sysml \
       -render-document TerrainNCAM::Report::TerrainReport -doc-form html -o terrain.html
 ```
 
@@ -215,9 +228,9 @@ sysml example_dags/models/terrain_ncam.sysml \
 from airflow_provider_opensysml.dag import KubernetesPodFactory, SysMLActionDag
 
 # From a graph the CLI exported; works with any opensysml release.
-terrain = SysMLActionDag.from_file("models/terrain_ncam.graphs.json", task_factory=KubernetesPodFactory())
+terrain = SysMLActionDag.from_file("terrain_ncam.graphs.json", task_factory=KubernetesPodFactory())
 # Or exported live through the hook at parse time (needs the develop client, see below).
-terrain = SysMLActionDag.from_model("models/terrain_ncam.sysml", "TerrainNCAM::Pipeline::Terrain")
+terrain = SysMLActionDag.from_model("terrain_ncam.sysml", "TerrainNCAM::Pipeline::Terrain")
 
 with DAG("terrain", schedule=None, ...) as dag:
     terrain.build(dag)
@@ -250,7 +263,7 @@ satisfy eyesFitTogether by ncamWorker;
 (`require_TN-3`) upstream of the step it names, or of every first step when the
 satisfying element is the worker or the pipeline itself, released once the requirement
 holds. `from_model(..., gates=True)` reads them from the model; from a file, pass
-`gates=load_gates("models/terrain_ncam.gates.json")` and a `RequirementGateFactory`:
+`gates=load_gates("terrain_ncam.gates.json")` and a `RequirementGateFactory`:
 
 ```python
 gates = RequirementGateFactory(MODEL, deferrable=True, poke_interval=30, timeout=3600)
@@ -260,7 +273,7 @@ terrain = SysMLActionDag.from_file(GRAPHS, task_factory=pods, gates=load_gates(G
 The example DAG does this for TN-1..TN-10 and, for TN-12 (this run's stereo pair),
 adds a `case` sensor bound from `dag_run.conf` before either eye is correlated. The
 same model renders the pipeline description —
-`sysml example_dags/models/terrain_ncam.sysml -render-document TerrainNCAM::Report::TerrainReport -doc-form html -o terrain.html`
+`sysml example_dags/terrain_ncam/terrain_ncam.sysml -render-document TerrainNCAM::Report::TerrainReport -doc-form html -o terrain.html`
 — with the step and product tables, the flow diagram, the requirement text and the
 traceability matrix.
 

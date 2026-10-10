@@ -22,7 +22,7 @@ from airflow_provider_opensysml.dag import (
     load_graphs,
 )
 
-GRAPHS = Path(__file__).parent.parent / "example_dags" / "models" / "terrain_ncam.graphs.json"
+GRAPHS = Path(__file__).parent.parent / "example_dags" / "terrain_ncam" / "terrain_ncam.graphs.json"
 
 # The tasks and edges of NASA-AMMOS/tig, examples/airflow-k8s-pipeline/dags/ids_terrain_ncam.py:
 #     [rad_left, rad_right] >> correlate_left
@@ -198,11 +198,42 @@ def test_performed_behavior_is_one_task_and_its_graph_is_not_expanded():
     assert generated.dependencies == []
 
 
+def test_an_unset_behavior_attribute_keeps_the_subjects_value():
+    graphs = {
+        "version": 1,
+        "subject": "P::Outer",
+        "actions": [
+            {
+                "name": "P::Outer",
+                "kind": "actionDef",
+                "attributes": [{"name": "image", "types": ["String"], "value": {"text": '"worker:1"'}}],
+                "nodes": [{"id": 0, "kind": "action usage", "name": "run", "performs": ["P::Inner"]}],
+            },
+            {
+                "name": "P::Inner",
+                "kind": "actionDef",
+                "attributes": [
+                    {"name": "image", "types": ["String"]},
+                    {"name": "wrapper", "types": ["String"]},
+                    {"name": "cpu", "types": ["ScalarValues::Integer"], "value": {"text": "2"}},
+                ],
+                "nodes": [],
+            },
+        ],
+    }
+    (step,) = SysMLActionDag(graphs, task_factory=empty_task_factory).steps
+    assert step.attributes == {"image": "worker:1", "wrapper": None, "cpu": 2}
+
+
 @pytest.mark.parametrize(
     ("graphs", "message"),
     [
         ({"version": 2, "subject": "S", "actions": [{"name": "S", "nodes": []}]}, "version 2"),
         ({"version": 1, "subject": "S", "actions": []}, "no action graph"),
+        (
+            {"version": 1, "subject": "S", "actions": [{"name": "Other", "nodes": []}]},
+            "no action graph for its subject 'S'",
+        ),
         (
             {
                 "version": 1,

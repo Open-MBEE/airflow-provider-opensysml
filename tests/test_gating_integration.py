@@ -18,7 +18,7 @@ from airflow_provider_opensysml.triggers.requirement import SysMLRequirementSati
 
 pytestmark = pytest.mark.integration
 
-MODELS = Path(__file__).parent.parent / "example_dags" / "models"
+MODELS = Path(__file__).parent.parent / "example_dags" / "terrain_ncam"
 TERRAIN = MODELS / "terrain_ncam.sysml"
 STEREO = "TerrainNCAM::Verification::stereoPairCheck"
 PAIR = {"leftAcquisition": "1835_0829848458_777", "rightAcquisition": "1835_0829848458_777"}

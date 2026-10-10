@@ -275,7 +275,9 @@ class SysMLActionDag:
         self.subject: str = self.graphs["subject"]
         self.task_factory: TaskFactory = task_factory or KubernetesPodFactory()
         forms = {form["name"]: form for form in self.graphs["actions"]}
-        subject_form = forms.get(self.subject) or self.graphs["actions"][0]
+        subject_form = forms.get(self.subject)
+        if subject_form is None:
+            raise ValueError(f"the export has no action graph for its subject {self.subject!r}")
         self.steps: list[ActionStep] = _steps(subject_form, forms)
         self.dependencies: list[tuple[str, str]] = _dependencies(subject_form, self.steps)
 
@@ -392,7 +394,9 @@ def _steps(subject_form: Mapping[str, Any], forms: Mapping[str, Mapping[str, Any
         behavior = forms.get(performs[0]) if performs else None
         attributes = dict(fallback)
         if behavior is not None:
-            attributes.update(_attribute_values(behavior))
+            for name, value in _attribute_values(behavior).items():
+                if value is not None or name not in attributes:
+                    attributes[name] = value
         steps.append(
             ActionStep(
                 task_id=names[node["id"]],

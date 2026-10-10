@@ -1,8 +1,8 @@
 """The M2020 NCAM terrain pipeline, generated from its SysML v2 model.
 
-``models/terrain_ncam.sysml`` models the pipeline as ``action def Terrain``; its
-``graphs:1`` export (``models/terrain_ncam.graphs.json``, written by
-``sysml models/terrain_ncam.sysml -graphs TerrainNCAM::Pipeline::Terrain -o ...``)
+``terrain_ncam.sysml`` in this directory models the pipeline as ``action def Terrain``; its
+``graphs:1`` export (``terrain_ncam.graphs.json``, written by
+``sysml terrain_ncam.sysml -graphs TerrainNCAM::Pipeline::Terrain -o ...``)
 is what this DAG is built from, so the task ids, the fan-out over both eyes and
 every dependency come from the model. Set ``OPENSYSML_TERRAIN_LIVE_EXPORT=1`` to
 export the graph from the model through the hook at parse time instead.
@@ -36,17 +36,19 @@ from airflow_provider_opensysml.dag import (
 )
 from airflow_provider_opensysml.sensors import SysMLRequirementSensor
 
-MODELS = Path(__file__).parent / "models"
-MODEL = os.environ.get("OPENSYSML_EXAMPLE_TERRAIN_MODEL") or str(MODELS / "terrain_ncam.sysml")
-GRAPHS = os.environ.get("OPENSYSML_EXAMPLE_TERRAIN_GRAPHS") or str(MODELS / "terrain_ncam.graphs.json")
-GATES = os.environ.get("OPENSYSML_EXAMPLE_TERRAIN_GATES") or str(MODELS / "terrain_ncam.gates.json")
+HERE = Path(__file__).parent
+MODEL = os.environ.get("OPENSYSML_EXAMPLE_TERRAIN_MODEL") or str(HERE / "terrain_ncam.sysml")
+GRAPHS = os.environ.get("OPENSYSML_EXAMPLE_TERRAIN_GRAPHS") or str(HERE / "terrain_ncam.graphs.json")
+GATES = os.environ.get("OPENSYSML_EXAMPLE_TERRAIN_GATES") or str(HERE / "terrain_ncam.gates.json")
 STEREO_PAIR_CHECK = "TerrainNCAM::Verification::stereoPairCheck"
 SUBJECT = "TerrainNCAM::Pipeline::Terrain"
 
 S3_ENDPOINT = os.environ.get("TIG_S3_ENDPOINT", "http://minio.tig-airflow.svc.cluster.local:9000")
 NAMESPACE = os.environ.get("TIG_NAMESPACE", "tig-airflow")
-S3_ACCESS_KEY = "{{ var.value.get('tig_s3_access_key', 'minioadmin') }}"
-S3_SECRET_KEY = "{{ var.value.get('tig_s3_secret_key', 'minioadmin') }}"
+# Airflow Variables, with no default: a run without them fails at render time
+# rather than reaching the bucket with guessed credentials.
+S3_ACCESS_KEY = "{{ var.value.tig_s3_access_key }}"
+S3_SECRET_KEY = "{{ var.value.tig_s3_secret_key }}"
 
 
 # --- M20 product naming, registered as Jinja macros ---------------------------
