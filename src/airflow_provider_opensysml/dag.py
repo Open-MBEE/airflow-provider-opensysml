@@ -129,8 +129,12 @@ class RequirementGate:
         )
 
 
-def gates_of_model(model: Any) -> list[RequirementGate]:
-    """Every ``satisfy ... by ...`` of the model, through the client's :meth:`~opensysml.Model.query`."""
+def gates_of_model(model: Any, subject: str | None = None) -> list[RequirementGate]:
+    """Every ``satisfy ... by ...`` of the model, through the client's :meth:`~opensysml.Model.query`.
+
+    With ``subject``, only those about it: satisfied by the subject or one of its
+    steps, or by a feature typed by it or performing it (``perform action t : Subject``).
+    """
     satisfactions = model.query(
         where={
             "@type": "PrimitiveConstraint",
@@ -155,7 +159,32 @@ def gates_of_model(model: Any) -> list[RequirementGate]:
                 str(properties.get("name") or ""),
             )
         )
+    if subject is not None:
+        gates = [gate for gate in gates if gate_concerns(model, gate, subject)]
     return gates
+
+
+def gate_concerns(model: Any, gate: RequirementGate, subject: str) -> bool:
+    """Whether a gate is satisfied by the subject, a step of it, or a feature typed by or performing it."""
+    feature = gate.satisfying_feature
+    if feature == subject or feature.startswith(f"{subject}::"):
+        return True
+    element = next(iter(model.query(scope=[feature])), None)
+    if element is None:
+        return False
+    typ = element.properties.get("type") or element.properties.get("definition")
+    if typ == subject:
+        return True
+    if not typ:
+        return False
+    members = model.query(
+        where={"@type": "PrimitiveConstraint", "operator": "=", "property": "owner", "value": [typ]}
+    )
+    return any(
+        member.properties.get("@type") == "ActionUsage"
+        and subject in (member.properties.get("type"), member.properties.get("general"))
+        for member in members
+    )
 
 
 def load_gates(source: str | Path | Sequence[Mapping[str, Any]]) -> list[RequirementGate]:
@@ -310,14 +339,15 @@ class SysMLActionDag:
         try:
             model = hook.load(connection, model_path, strict=strict)
             graphs = model.export_graphs(subject)
-            found = gates_of_model(model) if gates else []
+            found = gates_of_model(model, subject) if gates else []
         finally:
             connection.close()
         if graphs.version != GRAPHS_VERSION:
             raise ValueError(f"graphs version {graphs.version} is not supported; expected {GRAPHS_VERSION}")
         if gates:
             kwargs.setdefault(
-                "gate_factory", RequirementGateFactory(model_path, opensysml_conn_id=opensysml_conn_id)
+                "gate_factory",
+                RequirementGateFactory(model_path, opensysml_conn_id=opensysml_conn_id, strict=strict),
             )
             kwargs["gates"] = found
         return cls(graphs.content, **kwargs)
@@ -339,12 +369,18 @@ class SysMLActionDag:
         return [step.task_id for step in self.steps if step.task_id not in downstream]
 
     def gated_steps(self, gate: RequirementGate) -> list[str]:
-        """The steps a gate holds back: the one it names, else every first step."""
+        """The steps a gate holds back: the step it names, else every first step.
+
+        A feature under the subject that is not one of its steps is refused rather than
+        taken for a gate on every first step.
+        """
         prefix = f"{self.subject}::"
-        if gate.satisfying_feature.startswith(prefix):
-            task_id = gate.satisfying_feature[len(prefix) :]
+        feature = gate.satisfying_feature
+        if feature.startswith(prefix):
+            task_id = feature[len(prefix) :].split("::", 1)[0]
             if task_id in self.task_ids:
                 return [task_id]
+            raise ValueError(f"{gate.label}: {feature} is not a step of {self.subject}")
         return self.first_steps
 
     def build(self, dag: DAG) -> dict[str, BaseOperator]:

@@ -131,13 +131,28 @@ class SysMLQuestion:
             verdict = model.verify_satisfaction(self.element, engine=self.engine)
         else:
             verdict = model.validate_instance(self.element, engine=self.engine)
-        report = verdict_to_dict(verdict)
-        where = verdict.element or self.element
-        if verdict.error:
-            return Answer(False, report, error=f"{self.kind} {where} could not be decided: {verdict.error}")
-        if verdict.holds:
-            return Answer(True, report)
-        return Answer(False, report, [f"{self.kind} {where} does not hold ({verdict.condition or 'false'})"])
+        verdicts = list(verdict) if isinstance(verdict, (list, tuple)) else [verdict]
+        return self._verdicts_answer(verdicts)
+
+    def _verdicts_answer(self, verdicts: list[Any]) -> Answer:
+        """One answer for the verdicts a question got: every satisfaction of a model, or one element's."""
+        reports = [verdict_to_dict(v) for v in verdicts]
+        report = reports[0] if len(reports) == 1 else {"verdicts": reports}
+        if not verdicts:
+            return Answer(False, report, error=f"{self} could not be decided: nothing to check")
+        undecided = [
+            f"{self.kind} {v.element or self.element} could not be decided: {v.error}"
+            for v in verdicts
+            if v.error
+        ]
+        if undecided:
+            return Answer(False, report, error="; ".join(undecided))
+        failures = [
+            f"{self.kind} {v.element or self.element} does not hold ({v.condition or 'false'})"
+            for v in verdicts
+            if not v.holds
+        ]
+        return Answer(not failures, report, failures)
 
     def _run_case(self, model: Model) -> Answer:
         result = model.run_analysis(

@@ -161,3 +161,28 @@ def test_a_question_the_model_cannot_take_is_undecided_not_raised():
 
     with pytest.raises(OpenSysMLConnectionError):
         SysMLQuestion("requirement", "R::x").ask(Unreachable())
+
+
+def test_all_satisfactions_are_combined_into_one_answer():
+    holding = [verdict(kind="satisfy", element="A"), verdict(kind="satisfy", element="B")]
+    answer = SysMLQuestion("satisfy").ask(FakeModel(verify_satisfaction=holding))
+    assert answer.holds and answer.decided
+    assert [v["element"] for v in answer.report["verdicts"]] == ["A", "B"]
+
+    failing = [
+        verdict(kind="satisfy", element="A"),
+        verdict(kind="satisfy", element="B", holds=False, condition="x < 1"),
+    ]
+    answer = SysMLQuestion("satisfy").ask(FakeModel(verify_satisfaction=failing))
+    assert not answer.holds and answer.decided
+    assert answer.failures == ["satisfy B does not hold (x < 1)"]
+
+    undecided = [
+        verdict(kind="satisfy", element="A", holds=False, error="boom"),
+        verdict(kind="satisfy", element="B"),
+    ]
+    answer = SysMLQuestion("satisfy").ask(FakeModel(verify_satisfaction=undecided))
+    assert not answer.decided and answer.error == "satisfy A could not be decided: boom"
+
+    answer = SysMLQuestion("satisfy").ask(FakeModel(verify_satisfaction=[]))
+    assert not answer.decided and "nothing to check" in answer.error

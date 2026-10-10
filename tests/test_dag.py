@@ -3,6 +3,7 @@ from __future__ import annotations
 import json
 from datetime import datetime
 from pathlib import Path
+from types import SimpleNamespace
 
 import pytest
 from airflow.providers.standard.operators.empty import EmptyOperator
@@ -16,6 +17,7 @@ from airflow_provider_opensysml.dag import (
     SysMLActionDag,
     conf_arguments,
     empty_task_factory,
+    gate_concerns,
     gate_task_id,
     literal,
     load_gates,
@@ -343,6 +345,8 @@ def test_gates_hold_back_the_step_they_name_or_the_first_steps():
     assert terrain.gated_steps(tn3) == ["correlate_left"]
     tn9 = next(g for g in gates if g.short_name == "TN-9")
     assert terrain.gated_steps(tn9) == ["rad_left", "rad_right"]
+    with pytest.raises(ValueError, match="not a step of"):
+        terrain.gated_steps(RequirementGate("R", "TerrainNCAM::Pipeline::Terrain::nope"))
 
     dag = terrain.dag("gated", start_date=datetime(2026, 1, 1), schedule=None)
     assert built == gates
@@ -372,3 +376,35 @@ def test_requirement_gate_factory_builds_a_sensor():
     assert sensor.task_id == "require_X_1"
     assert sensor.model_path == "/m/t.sysml" and sensor.element == "R::x" and sensor.kind == "requirement"
     assert sensor.deferrable is True and sensor.poke_interval == 5 and sensor.opensysml_conn_id == "svc"
+
+
+def test_a_gate_concerns_the_subject_its_steps_or_a_feature_performing_it():
+    subject = "TerrainNCAM::Pipeline::Terrain"
+    elements = {
+        "D::ncamWorker": {"@type": "PartUsage", "type": "D::Worker"},
+        "D::eyeProducts": {"@type": "PartUsage", "type": "D::EyeProducts"},
+        "D::pipeline": {"@type": "ActionUsage", "type": subject},
+    }
+    members = {
+        "D::Worker": [
+            {"@type": "AttributeUsage"},
+            {"@type": "ActionUsage", "type": subject, "general": subject},
+        ],
+        "D::EyeProducts": [{"@type": "AttributeUsage"}],
+    }
+
+    class Model:
+        def query(self, scope=None, where=None):
+            if scope:
+                return [SimpleNamespace(properties=elements[s]) for s in scope if s in elements]
+            return [SimpleNamespace(properties=p) for p in members.get(where["value"][0], [])]
+
+    def concerns(feature: str) -> bool:
+        return gate_concerns(Model(), RequirementGate("R", feature), subject)
+
+    assert concerns(subject)
+    assert concerns(f"{subject}::rad_left")
+    assert concerns("D::ncamWorker")
+    assert concerns("D::pipeline")
+    assert not concerns("D::eyeProducts")
+    assert not concerns("P::Land::touchdown")

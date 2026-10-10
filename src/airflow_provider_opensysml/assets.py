@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import hashlib
+import json
 import re
 from collections.abc import Sequence
 from pathlib import Path
@@ -117,7 +119,10 @@ def sysml_requirement_asset(
         named_arguments=named_arguments,
         schedule=schedule,
     )
+    identity = question_digest(sysml_question)
     asset_name = name or asset_name_for(resolved, element)
+    if sysml_question != SysMLQuestion("requirement", element):
+        asset_name = f"{asset_name}_{identity}"
     trigger = SysMLRequirementSatisfiedTrigger(
         model_path=str(resolved),
         question=sysml_question.as_dict(),
@@ -128,5 +133,11 @@ def sysml_requirement_asset(
         settle_interval=settle_interval,
     )
     watcher = AssetWatcher(name=watcher_name or f"{asset_name}_satisfied", trigger=trigger)
-    uri = f"{resolved.as_uri()}?satisfies={quote(element or '*', safe='')}"
+    uri = f"{resolved.as_uri()}?satisfies={quote(element or '*', safe='')}&question={identity}"
     return Asset(name=asset_name, uri=uri, watchers=[watcher], **asset_kwargs)
+
+
+def question_digest(question: SysMLQuestion) -> str:
+    """A short digest of all that decides a question's answer, so distinct questions are distinct assets."""
+    canonical = json.dumps(question.as_dict(), sort_keys=True, default=str)
+    return hashlib.sha256(canonical.encode()).hexdigest()[:12]
