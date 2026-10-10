@@ -13,7 +13,7 @@ from test_dag import GRAPHS, TIG_EDGES, TIG_TASKS, edges_of
 
 pytestmark = pytest.mark.integration
 
-MODEL = Path(__file__).parent.parent / "example_dags" / "models" / "terrain_ncam.sysml"
+MODEL = Path(__file__).parent.parent / "example_dags" / "terrain_ncam" / "terrain_ncam.sysml"
 SUBJECT = "TerrainNCAM::Pipeline::Terrain"
 
 
