@@ -4,7 +4,9 @@ A SysML v2 model is an Airflow asset: :func:`sysml_model_asset` builds one whose
 watcher fires whenever the model's files change on disk. Its analysis and
 verification cases are tasks: :class:`SysMLAnalysisOperator` and
 :class:`SysMLVerifyOperator` run them through the ``opensysml`` client and report
-the result as XCom, failing the task when the model answers false.
+the result as XCom, failing the task when the model answers false. Its
+requirements gate work: :class:`SysMLRequirementSensor` waits until one holds, and
+:func:`sysml_requirement_asset` is an asset updated each time one becomes satisfied.
 """
 
 from __future__ import annotations
@@ -46,10 +48,19 @@ def get_provider_info() -> dict:
                 "python-modules": ["airflow_provider_opensysml.operators.sysml"],
             }
         ],
+        "sensors": [
+            {
+                "integration-name": "OpenSysML",
+                "python-modules": ["airflow_provider_opensysml.sensors.sysml"],
+            }
+        ],
         "triggers": [
             {
                 "integration-name": "OpenSysML",
-                "python-modules": ["airflow_provider_opensysml.triggers.model"],
+                "python-modules": [
+                    "airflow_provider_opensysml.triggers.model",
+                    "airflow_provider_opensysml.triggers.requirement",
+                ],
             }
         ],
     }

@@ -5,7 +5,7 @@ from pathlib import Path
 import pytest
 from airflow.sdk import Asset
 
-from airflow_provider_opensysml.assets import asset_name_for, sysml_model_asset
+from airflow_provider_opensysml.assets import asset_name_for, sysml_model_asset, sysml_requirement_asset
 from airflow_provider_opensysml.triggers.model import SysMLModelChangedTrigger
 
 
@@ -41,3 +41,17 @@ def test_default_name():
     assert asset_name_for("/x/rover.sysml") == "rover.sysml"
     assert asset_name_for("/x/my model (v2).sysml") == "my_model_v2_.sysml"
     assert asset_name_for("/x/") == "x"
+
+
+def test_requirement_assets_are_distinct_per_question(tmp_path: Path):
+    model = tmp_path / "p.sysml"
+    model.write_text("package P;")
+    plain = sysml_requirement_asset(model, "P::r")
+    one = sysml_requirement_asset(model, "P::check", kind="case", named_arguments={"limit": 1})
+    ten = sysml_requirement_asset(model, "P::check", kind="case", named_arguments={"limit": 10})
+    assert plain.name == "p.sysml:P_r"
+    assert one.uri != ten.uri and one.name != ten.name
+    assert one.uri.startswith(model.as_uri() + "?")
+    assert "satisfies=P%3A%3Acheck" in one.uri and "question=" in one.uri
+    again = sysml_requirement_asset(model, "P::check", kind="case", named_arguments={"limit": 1})
+    assert (again.uri, again.name) == (one.uri, one.name)

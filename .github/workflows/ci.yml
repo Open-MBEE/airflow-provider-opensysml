@@ -43,6 +43,7 @@ jobs:
         run: |
           sysml example_dags/terrain_ncam/terrain_ncam.sysml
           sysml -satisfy example_dags/terrain_ncam/terrain_ncam.sysml
+          sysml example_dags/terrain_ncam/terrain_ncam.sysml -analysis 'TerrainNCAM::Verification::stereoPairCheck(leftAcquisition = "a", rightAcquisition = "a", leftEye = "L", rightEye = "R")'
           sysml example_dags/terrain_ncam/terrain_ncam.sysml -graphs TerrainNCAM::Pipeline::Terrain -o "$RUNNER_TEMP/graphs.json"
           python -c "import json,sys; a=json.load(open(sys.argv[1])); b=json.load(open(sys.argv[2])); assert a['subject']==b['subject'] and len(a['actions'])==len(b['actions'])" "$RUNNER_TEMP/graphs.json" example_dags/terrain_ncam/terrain_ncam.graphs.json
           sysml example_dags/terrain_ncam/terrain_ncam.sysml -render-document TerrainNCAM::Report::TerrainReport -doc-form html -o "$RUNNER_TEMP/terrain.html"

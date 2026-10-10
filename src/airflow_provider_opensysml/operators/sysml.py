@@ -16,12 +16,10 @@ from airflow.sdk import BaseOperator
 from airflow.sdk.exceptions import AirflowException
 
 from airflow_provider_opensysml.hooks.opensysml import OpenSysMLHook
-from airflow_provider_opensysml.results import analysis_result_to_dict, verdict_to_dict
+from airflow_provider_opensysml.questions import VERIFY_KINDS, Answer, SysMLQuestion
 
 if TYPE_CHECKING:
     from opensysml import Model
-
-VERIFY_KINDS: tuple[str, ...] = ("constraint", "requirement", "satisfy", "object")
 
 
 class SysMLBaseOperator(BaseOperator):
@@ -66,10 +64,16 @@ class SysMLBaseOperator(BaseOperator):
     def answer(self, model: Model) -> dict[str, Any]:
         raise NotImplementedError
 
-    def _fail(self, message: str) -> None:
-        if self.fail_on_verdict:
-            raise AirflowException(message)
-        self.log.warning(message)
+    def _decide(self, answer: Answer) -> Answer:
+        """Fail on an undecided answer; on a false one unless ``fail_on_verdict`` is off."""
+        if answer.error:
+            raise AirflowException(answer.error)
+        if not answer.holds:
+            message = "; ".join(answer.failures)
+            if self.fail_on_verdict:
+                raise AirflowException(message)
+            self.log.warning(message)
+        return answer
 
 
 class SysMLAnalysisOperator(SysMLBaseOperator):
@@ -111,47 +115,25 @@ class SysMLAnalysisOperator(SysMLBaseOperator):
         self.schedule = schedule
 
     def answer(self, model: Model) -> dict[str, Any]:
-        result = model.run_analysis(
-            self.case,
-            subject=self.subject,
-            arguments=self.arguments,
-            named_arguments=self.named_arguments,
-            schedule=self.schedule,
-            engine=self.engine,
-        )
-        report = analysis_result_to_dict(result)
-        for name, value in report["outputs"].items():
-            self.log.info("%s.%s = %r", self.case, name, value)
-        failures = []
-        for verdict in result.verdicts:
-            if verdict.error:
-                raise AirflowException(
-                    f"{self.case}: {verdict.kind} {verdict.element} could not be decided: {verdict.error}"
-                )
-            if not verdict.holds:
-                failures.append(
-                    f"{verdict.kind} {verdict.element} does not hold ({verdict.condition or 'false'})"
-                )
-        for verification in result.verifications:
-            if verification.kind != "pass":
-                where = f"{verification.case_id} (subcase)" if verification.subcase else verification.case_id
-                detail = f": {verification.detail}" if verification.detail else ""
-                failures.append(f"verification {where} verdict: {verification.kind}{detail}")
-        for evaluation in result.evaluations:
-            if evaluation.error:
-                raise AirflowException(
-                    f"{self.case}: evaluation of {evaluation.function_id} failed: {evaluation.error}"
-                )
-        if failures:
-            self._fail(f"{self.case}: " + "; ".join(failures))
-        else:
-            self.log.info(
-                "%s: every verdict holds (%s, %s)",
+        answer = self._decide(
+            SysMLQuestion(
+                "case",
                 self.case,
-                result.standing.engine,
-                result.standing.strength,
+                subject=self.subject,
+                engine=self.engine,
+                arguments=self.arguments,
+                named_arguments=self.named_arguments,
+                schedule=self.schedule,
+            ).ask(model)
+        )
+        for name, value in answer.report["outputs"].items():
+            self.log.info("%s.%s = %r", self.case, name, value)
+        if answer.holds:
+            standing = answer.report["standing"]
+            self.log.info(
+                "%s: every verdict holds (%s, %s)", self.case, standing["engine"], standing["strength"]
             )
-        return report
+        return answer.report
 
 
 class SysMLVerifyOperator(SysMLBaseOperator):
@@ -188,10 +170,7 @@ class SysMLVerifyOperator(SysMLBaseOperator):
         super().__init__(**kwargs)
         if kind not in self.kinds:
             raise ValueError(f"kind must be one of {', '.join(self.kinds)}, not {kind!r}")
-        if kind != "satisfy" and not element:
-            raise ValueError(f"kind {kind!r} needs the element to verify")
-        if kind in ("satisfy", "object") and (subject or question):
-            raise ValueError(f"kind {kind!r} takes neither subject nor question")
+        SysMLQuestion(kind, element, subject=subject, question=question)
         self.kind = kind
         self.element = element
         self.subject = subject
@@ -199,28 +178,10 @@ class SysMLVerifyOperator(SysMLBaseOperator):
         self.question = question
 
     def answer(self, model: Model) -> dict[str, Any]:
-        if self.kind == "constraint":
-            verdict = model.verify_constraint(
-                self.element, subject=self.subject, engine=self.engine, question=self.question
-            )
-        elif self.kind == "requirement":
-            verdict = model.verify_requirement(
-                self.element, subject=self.subject, engine=self.engine, question=self.question
-            )
-        elif self.kind == "satisfy":
-            verdict = model.verify_satisfaction(self.element, engine=self.engine)
-        else:
-            verdict = model.validate_instance(self.element, engine=self.engine)
-        report = verdict_to_dict(verdict)
-        if verdict.error:
-            raise AirflowException(
-                f"{self.kind} {verdict.element or self.element} could not be decided: {verdict.error}"
-            )
-        if verdict.holds:
-            self.log.info(
-                "%s %s holds (%s)", self.kind, verdict.element or self.element, verdict.status or "holds"
-            )
-        else:
-            where = verdict.element or self.element
-            self._fail(f"{self.kind} {where} does not hold ({verdict.condition or 'false'})")
-        return report
+        question = SysMLQuestion(
+            self.kind, self.element, subject=self.subject, engine=self.engine, question=self.question
+        )
+        answer = self._decide(question.ask(model))
+        if answer.holds:
+            self.log.info("%s holds (%s)", question, answer.report["status"] or "holds")
+        return answer.report

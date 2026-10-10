@@ -27,11 +27,20 @@ from pathlib import Path
 from airflow.sdk import DAG
 from kubernetes.client import models as k8s
 
-from airflow_provider_opensysml.dag import ActionStep, KubernetesPodFactory, SysMLActionDag
+from airflow_provider_opensysml.dag import (
+    ActionStep,
+    KubernetesPodFactory,
+    RequirementGateFactory,
+    SysMLActionDag,
+    load_gates,
+)
+from airflow_provider_opensysml.sensors import SysMLRequirementSensor
 
 HERE = Path(__file__).parent
 MODEL = os.environ.get("OPENSYSML_EXAMPLE_TERRAIN_MODEL") or str(HERE / "terrain_ncam.sysml")
 GRAPHS = os.environ.get("OPENSYSML_EXAMPLE_TERRAIN_GRAPHS") or str(HERE / "terrain_ncam.graphs.json")
+GATES = os.environ.get("OPENSYSML_EXAMPLE_TERRAIN_GATES") or str(HERE / "terrain_ncam.gates.json")
+STEREO_PAIR_CHECK = "TerrainNCAM::Verification::stereoPairCheck"
 SUBJECT = "TerrainNCAM::Pipeline::Terrain"
 
 S3_ENDPOINT = os.environ.get("TIG_S3_ENDPOINT", "http://minio.tig-airflow.svc.cluster.local:9000")
@@ -62,6 +71,17 @@ def product_name(ras_base: str, product_type: str, ext: str) -> str:
     if len(product_type) != 3:
         raise ValueError(f"product_type must be 3 chars: {product_type!r}")
     return f"{ras_base[:23]}{product_type}{ras_base[26:]}.{ext}"
+
+
+def acquisition(fdr_key: str) -> str:
+    """The fields of an FDR basename both eyes of a pair share: all but instrument/eye and product type."""
+    b = _basename(fdr_key)
+    return b[4:23] + b[26:]
+
+
+def eye(fdr_key: str) -> str:
+    """The eye field of an FDR basename: ``L`` or ``R``."""
+    return _basename(fdr_key)[1]
 
 
 def sol_path(ras_base: str) -> str:
@@ -175,10 +195,13 @@ pods = KubernetesPodFactory(
     },
 )
 
+# The model's ``satisfy <requirement> by <step>`` statements become gates: a
+# SysMLRequirementSensor before each step, released once the requirement holds.
+gates = RequirementGateFactory(MODEL, poke_interval=30, timeout=3600)
 if os.environ.get("OPENSYSML_TERRAIN_LIVE_EXPORT"):
-    terrain = SysMLActionDag.from_model(MODEL, SUBJECT, task_factory=pods)
+    terrain = SysMLActionDag.from_model(MODEL, SUBJECT, task_factory=pods, gates=True, gate_factory=gates)
 else:
-    terrain = SysMLActionDag.from_file(GRAPHS, task_factory=pods)
+    terrain = SysMLActionDag.from_file(GRAPHS, task_factory=pods, gates=load_gates(GATES), gate_factory=gates)
 
 with DAG(
     dag_id="opensysml_terrain_ncam",
@@ -193,7 +216,27 @@ with DAG(
         "product_name": product_name,
         "sol_path": sol_path,
         "ods_prefix": ods_prefix,
+        "acquisition": acquisition,
+        "eye": eye,
     },
     tags=["opensysml", "m2020", "ids", "terrain", "vicar"],
 ) as dag:
-    terrain.build(dag)
+    tasks = terrain.build(dag)
+
+    # TN-12 is about this run's pair, so its verification case is run with the
+    # run's values bound to its in parameters, before either eye is correlated.
+    stereo_pair = SysMLRequirementSensor(
+        task_id="require_TN-12",
+        model_path=MODEL,
+        kind="case",
+        element=STEREO_PAIR_CHECK,
+        named_arguments={
+            "leftAcquisition": "{{ acquisition(dag_run.conf['left_key']) }}",
+            "rightAcquisition": "{{ acquisition(dag_run.conf['right_key']) }}",
+            "leftEye": "{{ eye(dag_run.conf['left_key']) }}",
+            "rightEye": "{{ eye(dag_run.conf['right_key']) }}",
+        },
+        poke_interval=30,
+        timeout=600,
+    )
+    stereo_pair >> [tasks["correlate_left"], tasks["correlate_right"]]

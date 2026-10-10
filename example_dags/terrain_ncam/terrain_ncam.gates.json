@@ -1,0 +1,62 @@
+[
+  {
+    "requirement": "TerrainNCAM::Requirements::radLeftCpu",
+    "satisfyingFeature": "TerrainNCAM::Pipeline::Terrain::rad_left",
+    "shortName": "TN-1",
+    "name": "radLeftCpu"
+  },
+  {
+    "requirement": "TerrainNCAM::Requirements::radRightCpu",
+    "satisfyingFeature": "TerrainNCAM::Pipeline::Terrain::rad_right",
+    "shortName": "TN-2",
+    "name": "radRightCpu"
+  },
+  {
+    "requirement": "TerrainNCAM::Requirements::correlateLeftCpu",
+    "satisfyingFeature": "TerrainNCAM::Pipeline::Terrain::correlate_left",
+    "shortName": "TN-3",
+    "name": "correlateLeftCpu"
+  },
+  {
+    "requirement": "TerrainNCAM::Requirements::correlateRightCpu",
+    "satisfyingFeature": "TerrainNCAM::Pipeline::Terrain::correlate_right",
+    "shortName": "TN-4",
+    "name": "correlateRightCpu"
+  },
+  {
+    "requirement": "TerrainNCAM::Requirements::xyzLeftCpu",
+    "satisfyingFeature": "TerrainNCAM::Pipeline::Terrain::xyz_left",
+    "shortName": "TN-5",
+    "name": "xyzLeftCpu"
+  },
+  {
+    "requirement": "TerrainNCAM::Requirements::xyzRightCpu",
+    "satisfyingFeature": "TerrainNCAM::Pipeline::Terrain::xyz_right",
+    "shortName": "TN-6",
+    "name": "xyzRightCpu"
+  },
+  {
+    "requirement": "TerrainNCAM::Requirements::meshLeftCpu",
+    "satisfyingFeature": "TerrainNCAM::Pipeline::Terrain::mesh_left",
+    "shortName": "TN-7",
+    "name": "meshLeftCpu"
+  },
+  {
+    "requirement": "TerrainNCAM::Requirements::meshRightCpu",
+    "satisfyingFeature": "TerrainNCAM::Pipeline::Terrain::mesh_right",
+    "shortName": "TN-8",
+    "name": "meshRightCpu"
+  },
+  {
+    "requirement": "TerrainNCAM::Requirements::eyesFitTogether",
+    "satisfyingFeature": "TerrainNCAM::Deployment::ncamWorker",
+    "shortName": "TN-9",
+    "name": "eyesFitTogether"
+  },
+  {
+    "requirement": "TerrainNCAM::Requirements::sharedRasBasename",
+    "satisfyingFeature": "TerrainNCAM::Deployment::eyeProducts",
+    "shortName": "TN-10",
+    "name": "sharedRasBasename"
+  }
+]

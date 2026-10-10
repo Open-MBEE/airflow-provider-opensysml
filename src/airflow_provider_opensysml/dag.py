@@ -31,7 +31,8 @@ behavior's attributes in a pod sized by ``cpu`` and ``memoryGi``;
 from __future__ import annotations
 
 import json
-from collections.abc import Callable, Iterable, Mapping
+import re
+from collections.abc import Callable, Iterable, Mapping, Sequence
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
@@ -93,6 +94,138 @@ class ActionStep:
 TaskFactory = Callable[[ActionStep, "DAG"], "BaseOperator"]
 
 
+@dataclass(frozen=True)
+class RequirementGate:
+    """A ``satisfy <requirement> by <feature>`` of the model: the step named waits for the requirement.
+
+    :param requirement: FQN of the requirement usage satisfied
+    :param satisfying_feature: FQN of the feature that satisfies it — a step of the subject, or
+        the subject or a part that performs it, in which case every first step waits
+    :param short_name: The requirement's short name (``TN-3``), if it declares one
+    :param name: The requirement's name
+    """
+
+    requirement: str
+    satisfying_feature: str
+    short_name: str = ""
+    name: str = ""
+
+    @property
+    def label(self) -> str:
+        return self.short_name or self.name or self.requirement.rsplit("::", 1)[-1]
+
+    def as_dict(self) -> dict[str, str]:
+        return {
+            "requirement": self.requirement,
+            "satisfyingFeature": self.satisfying_feature,
+            "shortName": self.short_name,
+            "name": self.name,
+        }
+
+    @classmethod
+    def from_dict(cls, data: Mapping[str, Any]) -> RequirementGate:
+        return cls(
+            data["requirement"], data["satisfyingFeature"], data.get("shortName", ""), data.get("name", "")
+        )
+
+
+def gates_of_model(model: Any, subject: str | None = None) -> list[RequirementGate]:
+    """Every ``satisfy ... by ...`` of the model, through the client's :meth:`~opensysml.Model.query`.
+
+    With ``subject``, only those about it: satisfied by the subject or one of its
+    steps, or by a feature typed by it or performing it (``perform action t : Subject``).
+    """
+    satisfactions = model.query(
+        where={
+            "@type": "PrimitiveConstraint",
+            "operator": "=",
+            "property": "@type",
+            "value": ["SatisfyRequirementUsage"],
+        }
+    )
+    gates = []
+    for satisfaction in satisfactions:
+        requirement = satisfaction.properties.get("satisfiedRequirement")
+        feature = satisfaction.properties.get("satisfyingFeature")
+        if not requirement or not feature:
+            continue
+        element = next(iter(model.query(scope=[requirement])), None)
+        properties = element.properties if element is not None else {}
+        gates.append(
+            RequirementGate(
+                requirement,
+                feature,
+                str(properties.get("shortName") or ""),
+                str(properties.get("name") or ""),
+            )
+        )
+    if subject is not None:
+        gates = [gate for gate in gates if gate_concerns(model, gate, subject)]
+    return gates
+
+
+def gate_concerns(model: Any, gate: RequirementGate, subject: str) -> bool:
+    """Whether a gate is satisfied by the subject, a step of it, or a feature typed by or performing it."""
+    feature = gate.satisfying_feature
+    if feature == subject or feature.startswith(f"{subject}::"):
+        return True
+    element = next(iter(model.query(scope=[feature])), None)
+    if element is None:
+        return False
+    typ = element.properties.get("type") or element.properties.get("definition")
+    if typ == subject:
+        return True
+    if not typ:
+        return False
+    members = model.query(
+        where={"@type": "PrimitiveConstraint", "operator": "=", "property": "owner", "value": [typ]}
+    )
+    return any(
+        member.properties.get("@type") == "ActionUsage"
+        and subject in (member.properties.get("type"), member.properties.get("general"))
+        for member in members
+    )
+
+
+def load_gates(source: str | Path | Sequence[Mapping[str, Any]]) -> list[RequirementGate]:
+    """Gates from the list :func:`gates_of_model` found, or a JSON file holding it."""
+    if isinstance(source, (str, Path)):
+        source = json.loads(Path(source).read_text())
+    return [RequirementGate.from_dict(gate) for gate in source]
+
+
+GateFactory = Callable[[RequirementGate, "DAG"], "BaseOperator"]
+
+
+class RequirementGateFactory:
+    """Builds a :class:`~airflow_provider_opensysml.sensors.sysml.SysMLRequirementSensor` per gate.
+
+    The task is ``require_<label>`` — ``require_TN-3`` — and waits until the gate's
+    requirement holds of the model at ``model_path``; ``sensor_kwargs`` (``deferrable``,
+    ``poke_interval``, ``timeout``, ``opensysml_conn_id``, ...) are passed to every sensor.
+    """
+
+    def __init__(self, model_path: str, **sensor_kwargs: Any) -> None:
+        self.model_path = model_path
+        self.sensor_kwargs = sensor_kwargs
+
+    def __call__(self, gate: RequirementGate, dag: DAG) -> BaseOperator:
+        from airflow_provider_opensysml.sensors.sysml import SysMLRequirementSensor
+
+        return SysMLRequirementSensor(
+            task_id=gate_task_id(gate),
+            model_path=self.model_path,
+            kind="requirement",
+            element=gate.requirement,
+            dag=dag,
+            **self.sensor_kwargs,
+        )
+
+
+def gate_task_id(gate: RequirementGate) -> str:
+    return "require_" + re.sub(r"[^A-Za-z0-9_.-]+", "_", gate.label)
+
+
 def load_graphs(source: str | Path | Mapping[str, Any]) -> dict[str, Any]:
     """Parse a ``graphs`` export from JSON text, a file path or a mapping, and check its version."""
     if isinstance(source, Mapping):
@@ -151,10 +284,23 @@ class SysMLActionDag:
     :param graphs: A ``graphs:1`` export: the JSON text, a path to a file the CLI
         wrote, or the parsed mapping
     :param task_factory: Builds the operator of each step; :class:`KubernetesPodFactory` by default
+    :param gates: The model's ``satisfy ... by ...`` statements (see :class:`RequirementGate`); a
+        gate on a step runs before it, a gate on anything else before every first step
+    :param gate_factory: Builds the task of each gate; a :class:`RequirementGateFactory` is needed
+        when there are gates
     """
 
-    def __init__(self, graphs: str | Path | Mapping[str, Any], *, task_factory: TaskFactory | None = None):
+    def __init__(
+        self,
+        graphs: str | Path | Mapping[str, Any],
+        *,
+        task_factory: TaskFactory | None = None,
+        gates: Sequence[RequirementGate] | None = None,
+        gate_factory: GateFactory | None = None,
+    ):
         self.graphs = load_graphs(graphs)
+        self.gates: list[RequirementGate] = list(gates or ())
+        self.gate_factory = gate_factory
         self.subject: str = self.graphs["subject"]
         self.task_factory: TaskFactory = task_factory or KubernetesPodFactory()
         forms = {form["name"]: form for form in self.graphs["actions"]}
@@ -177,9 +323,15 @@ class SysMLActionDag:
         *,
         opensysml_conn_id: str = "opensysml_default",
         strict: bool = True,
+        gates: bool = False,
         **kwargs: Any,
     ) -> SysMLActionDag:
-        """Export the subject live through :class:`~airflow_provider_opensysml.hooks.OpenSysMLHook`."""
+        """Export the subject live through :class:`~airflow_provider_opensysml.hooks.OpenSysMLHook`.
+
+        With ``gates``, the model's ``satisfy ... by ...`` statements are read too
+        and each becomes a :class:`RequirementGateFactory` sensor over ``model_path``
+        unless a ``gate_factory`` is given.
+        """
         from airflow_provider_opensysml.hooks import OpenSysMLHook
 
         hook = OpenSysMLHook(opensysml_conn_id)
@@ -187,10 +339,17 @@ class SysMLActionDag:
         try:
             model = hook.load(connection, model_path, strict=strict)
             graphs = model.export_graphs(subject)
+            found = gates_of_model(model, subject) if gates else []
         finally:
             connection.close()
         if graphs.version != GRAPHS_VERSION:
             raise ValueError(f"graphs version {graphs.version} is not supported; expected {GRAPHS_VERSION}")
+        if gates:
+            kwargs.setdefault(
+                "gate_factory",
+                RequirementGateFactory(model_path, opensysml_conn_id=opensysml_conn_id, strict=strict),
+            )
+            kwargs["gates"] = found
         return cls(graphs.content, **kwargs)
 
     @property
@@ -203,11 +362,39 @@ class SysMLActionDag:
                 return step
         raise KeyError(task_id)
 
+    @property
+    def first_steps(self) -> list[str]:
+        """The steps nothing in the subject runs before."""
+        downstream = {later for _, later in self.dependencies}
+        return [step.task_id for step in self.steps if step.task_id not in downstream]
+
+    def gated_steps(self, gate: RequirementGate) -> list[str]:
+        """The steps a gate holds back: the step it names, else every first step.
+
+        A feature under the subject that is not one of its steps is refused rather than
+        taken for a gate on every first step.
+        """
+        prefix = f"{self.subject}::"
+        feature = gate.satisfying_feature
+        if feature.startswith(prefix):
+            task_id = feature[len(prefix) :].split("::", 1)[0]
+            if task_id in self.task_ids:
+                return [task_id]
+            raise ValueError(f"{gate.label}: {feature} is not a step of {self.subject}")
+        return self.first_steps
+
     def build(self, dag: DAG) -> dict[str, BaseOperator]:
-        """Add one task per step to ``dag`` and wire the dependencies; returns the tasks by id."""
+        """Add one task per step and per gate to ``dag``, wire the dependencies; returns the tasks by id."""
         tasks = {step.task_id: self.task_factory(step, dag) for step in self.steps}
         for upstream, downstream in self.dependencies:
             tasks[upstream] >> tasks[downstream]
+        if self.gates and self.gate_factory is None:
+            raise ValueError("gates need a gate_factory to build their tasks")
+        for gate in self.gates:
+            task = self.gate_factory(gate, dag)
+            tasks[task.task_id] = task
+            for task_id in self.gated_steps(gate):
+                task >> tasks[task_id]
         return tasks
 
     def dag(self, dag_id: str, **dag_kwargs: Any) -> DAG:
