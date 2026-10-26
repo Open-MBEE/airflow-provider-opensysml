@@ -79,15 +79,15 @@ package Descent {
             assign left := loaded - used;
         }
 
-        out fuelUsed : Real = burn.used;
-        out wetMass : Real = lander.dryMass + remaining.left;
+        out fuelUsed : Real[1] = burn.used;
+        out wetMass : Real[1] = lander.dryMass + remaining.left;
 
         objective reserveHeld : FuelReserve {
             subject = lander;
             in fuelLeft = remaining.left;
         }
 
-        return fuelLeft : Real = remaining.left;
+        return fuelLeft : Real[1] = remaining.left;
     }
 
     // A usage that binds its subject runs without an object on the command line.
