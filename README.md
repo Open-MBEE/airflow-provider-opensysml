@@ -28,10 +28,12 @@ Python 3.10 or later.
 pip install airflow-provider-opensysml
 ```
 
-The `opensysml` client resolves its `sysml-grpc` binary as its documentation
-describes: `$OPENSYSML_BINARY`, then its cache, then a download of the release it
-pins. Point `OPENSYSML_BINARY` at a build, or set up an `opensysml` connection
-naming a running service, to avoid the download on workers.
+The provider needs `opensysml` 0.11.0 or later, the first release whose client and
+service carry graph export and the verification questions the provider asks; `pip`
+installs it. The `opensysml` client resolves its `sysml-grpc` binary as its
+documentation describes: `$OPENSYSML_BINARY`, then its cache, then a download of the
+release it pins. Point `OPENSYSML_BINARY` at a build, or set up an `opensysml`
+connection naming a running service, to avoid the download on workers.
 
 ## Examples
 
@@ -227,9 +229,9 @@ sysml example_dags/terrain_ncam/terrain_ncam.sysml \
 ```python
 from airflow_provider_opensysml.dag import KubernetesPodFactory, SysMLActionDag
 
-# From a graph the CLI exported; works with any opensysml release.
+# From a graph the CLI exported.
 terrain = SysMLActionDag.from_file("terrain_ncam.graphs.json", task_factory=KubernetesPodFactory())
-# Or exported live through the hook at parse time (needs the develop client, see below).
+# Or exported live through the hook at parse time.
 terrain = SysMLActionDag.from_model("terrain_ncam.sysml", "TerrainNCAM::Pipeline::Terrain")
 
 with DAG("terrain", schedule=None, ...) as dag:
@@ -277,11 +279,10 @@ same model renders the pipeline description —
 — with the step and product tables, the flow diagram, the requirement text and the
 traceability matrix.
 
-### Until the next OpenSysML release
+### Against an unreleased OpenSysML
 
-Graph export (`sysml -graphs`, `Model.export_graphs`) is on OpenSysML's
-`develop` branch and not yet in a released `opensysml` wheel. Until it is, build
-the service and install the client from a checkout (Go 1.25 or later):
+The provider is tested against the released `opensysml` and, as an early warning, against
+OpenSysML's `develop` branch. To run it against a checkout yourself (Go 1.25 or later):
 
 ```sh
 git clone --branch develop https://github.com/Open-MBEE/OpenSysML.git
@@ -290,17 +291,27 @@ pip install -e client/python
 export OPENSYSML_BINARY=$PWD/bin/sysml-grpc   # the client uses this build instead of a release
 ```
 
-CI does the same. Users on a released client are not blocked: export the graph
-with the CLI and build the DAG from the file with `SysMLActionDag.from_file`.
-
 ## Development
 
 ```sh
 pip install -e ".[dev]"
 ruff check . && ruff format --check .
 pytest -m "not integration"                 # no service needed
-OPENSYSML_BINARY=/path/to/sysml-grpc pytest  # the operator and live-export tests against a real service
+pytest                                      # the operator and live-export tests against a real service
 ```
+
+The integration tests start a private `sysml-grpc` the way a task does, so they run
+against the release the installed `opensysml` pins, or against `$OPENSYSML_BINARY` when it
+is set. CI runs the whole suite against the released client on Python 3.10 and 3.12, and
+against OpenSysML `develop` as an early warning that does not block a change here.
+
+### Releasing
+
+A release is a tag `vX.Y.Z` whose version matches `project.version` in
+`pyproject.toml` and `__version__` in `src/airflow_provider_opensysml/__init__.py`; the
+`release` workflow builds the sdist and wheel, checks them, and publishes to PyPI through
+[trusted publishing](https://docs.pypi.org/trusted-publishers/). Move the `Unreleased`
+section of `CHANGELOG.md` under the version first.
 
 ## License
 
