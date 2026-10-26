@@ -20,12 +20,14 @@ classifiers = [
 ]
 dependencies = [
     "apache-airflow>=3.0.0",
-    "opensysml>=0.9.2",
+    "opensysml>=0.11.0",
 ]
 
 [project.optional-dependencies]
 kubernetes = ["apache-airflow-providers-cncf-kubernetes>=8.0.0"]
 dev = [
+    "build>=1.2",
+    "twine>=5",
     "pytest>=8",
     "pytest-asyncio>=0.23",
     "ruff>=0.6",
@@ -36,6 +38,7 @@ dev = [
 [project.urls]
 Homepage = "https://github.com/Open-MBEE/airflow-provider-opensysml"
 OpenSysML = "https://github.com/Open-MBEE/OpenSysML"
+Changelog = "https://github.com/Open-MBEE/airflow-provider-opensysml/blob/develop/CHANGELOG.md"
 
 [project.entry-points.apache_airflow_provider]
 provider_info = "airflow_provider_opensysml:get_provider_info"
