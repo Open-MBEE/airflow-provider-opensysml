@@ -5,7 +5,7 @@ from importlib.metadata import entry_points
 
 import pytest
 
-from airflow_provider_opensysml import __version__, get_provider_info
+from airflow_provider_opensysml import UI_FIELD_BEHAVIOUR, __version__, get_provider_info
 
 
 def test_provider_info_names_importable_modules():
@@ -20,6 +20,12 @@ def test_provider_info_names_importable_modules():
     module, _, cls = conn["hook-class-name"].rpartition(".")
     hook = getattr(importlib.import_module(module), cls)
     assert hook.conn_type == conn["connection-type"] == "opensysml"
+    assert conn["ui-field-behaviour"] is UI_FIELD_BEHAVIOUR
+    assert hook.get_ui_field_behaviour() == {
+        "hidden_fields": UI_FIELD_BEHAVIOUR["hidden-fields"],
+        "relabeling": UI_FIELD_BEHAVIOUR["relabeling"],
+        "placeholders": UI_FIELD_BEHAVIOUR["placeholders"],
+    }
 
 
 def test_entry_point_registered():
@@ -39,3 +45,16 @@ def test_providers_manager_discovers_hook_and_trigger():
         pytest.skip("package not installed")
     assert "opensysml" in manager.hooks
     assert "airflow_provider_opensysml.triggers.model" in [t.trigger_class_name for t in manager.trigger]
+
+
+def test_providers_manager_reads_connection_form_from_manifest():
+    pytest.importorskip("airflow.providers_manager")
+    from airflow.providers_manager import ProvidersManager
+
+    manager = ProvidersManager()
+    if "airflow-provider-opensysml" not in manager.providers:
+        pytest.skip("package not installed")
+    behaviour = manager.field_behaviours["opensysml"]
+    assert behaviour["hidden_fields"] == UI_FIELD_BEHAVIOUR["hidden-fields"]
+    assert behaviour["relabeling"] == UI_FIELD_BEHAVIOUR["relabeling"]
+    assert behaviour["placeholders"]["extra"] == UI_FIELD_BEHAVIOUR["placeholders"]["extra"]
