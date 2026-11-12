@@ -43,7 +43,7 @@ class OpenSysMLHook(BaseHook):
             "placeholders": {
                 "host": "leave empty to start a private service",
                 "port": "50051",
-                "extra": '{"version": "v0.9.2", "require_capabilities": ["verification"]}',
+                "extra": '{"version": "v0.12.0", "require_capabilities": ["verification"]}',
             },
         }
 

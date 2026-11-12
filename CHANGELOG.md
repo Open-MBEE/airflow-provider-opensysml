@@ -26,5 +26,10 @@ All notable changes to this provider are recorded here. The format follows
 
 ### Changed
 
-- Requires `opensysml` 0.11.0 or later, the first release carrying graph export and the
-  verification questions, so no OpenSysML source build is needed.
+- Requires `opensysml` 0.12.0 or later: OpenSysML 0.12.0 made a `Project`/`WhereFeature`
+  read of a feature a row lacks a `missing-feature` error, and the `terrain_ncam` report's
+  `StepTable` query now says `tolerate = true` to keep filtering the pipeline's flows and
+  joins out, which 0.11.0 does not accept.
+- A verdict's XCom report carries the `notes` its answer rests on, the `witness`
+  assignment of a violated or satisfiable question and the engine's `standing`, which
+  OpenSysML 0.12.0 reports beside each verdict.

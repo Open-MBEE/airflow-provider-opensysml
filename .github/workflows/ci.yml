@@ -44,7 +44,7 @@ jobs:
       - uses: actions/setup-go@v5
         if: matrix.opensysml == 'develop'
         with:
-          go-version: "1.25"
+          go-version: "stable"
       - name: Build OpenSysML develop
         if: matrix.opensysml == 'develop'
         run: |

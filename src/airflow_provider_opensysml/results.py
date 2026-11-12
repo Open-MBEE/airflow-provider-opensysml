@@ -45,6 +45,22 @@ def verdict_to_dict(verdict: Any) -> dict[str, Any]:
         "requirement": verdict.requirement_id,
         "instance_path": verdict.instance_path,
         "verifications": [verification_to_dict(v) for v in verdict.verifications],
+        "notes": [note_to_dict(n) for n in verdict.notes],
+        "witness": [witness_to_dict(w) for w in verdict.witness],
+        "standing": standing_to_dict(verdict.standing),
+    }
+
+
+def note_to_dict(note: Any) -> dict[str, Any]:
+    return {"kind": note.kind, "subject": note.subject, "text": note.text}
+
+
+def witness_to_dict(assignment: Any) -> dict[str, Any]:
+    return {
+        "feature": assignment.feature,
+        "value": jsonable(assignment.value),
+        "unit": assignment.unit,
+        "exact": assignment.exact,
     }
 
 
@@ -59,7 +75,9 @@ def evaluation_to_dict(evaluation: Any) -> dict[str, Any]:
     }
 
 
-def standing_to_dict(standing: Any) -> dict[str, Any]:
+def standing_to_dict(standing: Any) -> dict[str, Any] | None:
+    if standing is None:
+        return None
     return {
         "engine": standing.engine,
         "strength": standing.strength,
