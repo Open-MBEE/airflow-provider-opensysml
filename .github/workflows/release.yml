@@ -1,8 +1,11 @@
 name: Release
 
+# A tag vX.Y.Z publishes to PyPI and opens a GitHub release; a manual run
+# rehearses the same build against TestPyPI without tagging.
 on:
   push:
     tags: ["v*"]
+  workflow_dispatch:
 
 jobs:
   build:
@@ -12,26 +15,63 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
-      - name: Check the tag against the package version
+      - name: Check the version, the tag and the changelog agree
         run: |
-          tag="${GITHUB_REF_NAME#v}"
           version="$(python -c 'import tomllib; print(tomllib.load(open("pyproject.toml", "rb"))["project"]["version"])')"
           module="$(sed -n 's/^__version__ = "\(.*\)"$/\1/p' src/airflow_provider_opensysml/__init__.py)"
-          test "$tag" = "$version" -a "$tag" = "$module" || {
-            echo "tag v$tag, pyproject.toml $version, __init__.py $module: they must agree" >&2
+          test "$version" = "$module" || {
+            echo "pyproject.toml $version, __init__.py $module: they must agree" >&2
             exit 1
           }
+          if [ "$GITHUB_REF_TYPE" = tag ]; then
+            test "${GITHUB_REF_NAME#v}" = "$version" || {
+              echo "tag $GITHUB_REF_NAME, package version $version: they must agree" >&2
+              exit 1
+            }
+            python scripts/release_notes.py "$version" > release-notes.md
+          fi
       - name: Build
         run: |
           python -m pip install --upgrade pip build twine
           python -m build
-          twine check dist/*
+          twine check --strict dist/*
+      # The wheel as a user gets it: installed outside the checkout, with the
+      # unit tests run against the installed copy.
+      - name: Test the built wheel
+        run: |
+          python -m venv "$RUNNER_TEMP/wheel"
+          "$RUNNER_TEMP/wheel/bin/pip" install "$(ls dist/*.whl)[kubernetes]" pytest pytest-asyncio
+          mkdir "$RUNNER_TEMP/run" && cp -r tests example_dags pyproject.toml "$RUNNER_TEMP/run/"
+          cd "$RUNNER_TEMP/run"
+          "$RUNNER_TEMP/wheel/bin/python" -c 'import airflow_provider_opensysml as p; assert "site-packages" in p.__file__, p.__file__'
+          "$RUNNER_TEMP/wheel/bin/python" -m pytest -m "not integration"
       - uses: actions/upload-artifact@v4
         with:
           name: dist
-          path: dist/
+          path: |
+            dist/
+            release-notes.md
+
+  testpypi:
+    if: github.event_name == 'workflow_dispatch'
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: testpypi
+      url: https://test.pypi.org/project/airflow-provider-opensysml/
+    permissions:
+      id-token: write
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: dist
+      - uses: pypa/gh-action-pypi-publish@release/v1
+        with:
+          repository-url: https://test.pypi.org/legacy/
+          skip-existing: true
 
   publish:
+    if: github.ref_type == 'tag'
     needs: build
     runs-on: ubuntu-latest
     environment:
@@ -43,5 +83,18 @@ jobs:
       - uses: actions/download-artifact@v4
         with:
           name: dist
-          path: dist/
       - uses: pypa/gh-action-pypi-publish@release/v1
+
+  github-release:
+    needs: publish
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: dist
+      - name: Open the GitHub release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh release create "$GITHUB_REF_NAME" dist/* --repo "$GITHUB_REPOSITORY" --title "$GITHUB_REF_NAME" --notes-file release-notes.md
