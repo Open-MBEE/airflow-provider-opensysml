@@ -23,7 +23,7 @@ jobs:
             echo "pyproject.toml $version, __init__.py $module: they must agree" >&2
             exit 1
           }
-          if [ "$GITHUB_REF_TYPE" = tag ]; then
+          if [ "$GITHUB_EVENT_NAME" = push ]; then
             test "${GITHUB_REF_NAME#v}" = "$version" || {
               echo "tag $GITHUB_REF_NAME, package version $version: they must agree" >&2
               exit 1
@@ -71,7 +71,7 @@ jobs:
           skip-existing: true
 
   publish:
-    if: github.ref_type == 'tag'
+    if: github.event_name == 'push' && github.ref_type == 'tag'
     needs: build
     runs-on: ubuntu-latest
     environment:
