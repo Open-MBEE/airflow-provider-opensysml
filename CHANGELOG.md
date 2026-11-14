@@ -34,9 +34,13 @@ All notable changes to this provider are recorded here. The format follows
 - The package ships `py.typed`, and its source distribution carries the examples and the
   changelog beside the tests that read them.
 - Requires `opensysml` 0.12.0 or later: OpenSysML 0.12.0 made a `Project`/`WhereFeature`
-  read of a feature a row lacks a `missing-feature` error, and the `terrain_ncam` report's
-  `StepTable` query now says `tolerate = true` to keep filtering the pipeline's flows and
-  joins out, which 0.11.0 does not accept.
+  read of a feature a row lacks a `missing-feature` error. The `terrain_ncam` report's
+  `StepTable` now selects the pipeline's steps with `WhereType(..., exact = true)`, which
+  leaves the fork and join nodes out, so a step that lacks a sizing fails the query rather
+  than leaving an empty cell; 0.11.0 does not accept `exact`.
+- The `terrain_ncam` model states each step's cpu, memory and thread count as a default its
+  usages may override, and its report gains `EyeCpuDifference`, a `Differ` table of the
+  step types whose cpu limit differs between the eyes.
 - A verdict's XCom report carries the `notes` its answer rests on, the `witness`
   assignment of a violated or satisfiable question and the engine's `standing`, which
   OpenSysML 0.12.0 reports beside each verdict.
