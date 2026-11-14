@@ -1,5 +1,7 @@
-name: Release
+name: Publish
 
+# Every upload to PyPI goes through this one workflow, the file PyPI's trusted
+# publisher names, so the publisher in the provenance never changes.
 # A tag vX.Y.Z publishes to PyPI and opens a GitHub release; a manual run
 # rehearses the same build against TestPyPI without tagging.
 on:

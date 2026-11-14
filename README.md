@@ -310,15 +310,17 @@ here.
 ### Releasing
 
 The provider is published to [PyPI](https://pypi.org/project/airflow-provider-opensysml/)
-by the `release` workflow, through
+by the `publish` workflow, through
 [trusted publishing](https://docs.pypi.org/trusted-publishers/): PyPI trusts the workflow
-`release.yml` of this repository in the GitHub environment `pypi` (and TestPyPI the
-environment `testpypi`), so no token is stored.
+`publish.yml` of this repository in the GitHub environment `pypi` (and TestPyPI the
+environment `testpypi`), so no token is stored. Every upload goes through that one
+workflow file: PyPI records the publishing workflow in each file's provenance, and a
+project whose publisher changes between uploads fails its checks.
 
 1. Set the version in `project.version` of `pyproject.toml` and `__version__` of
    `src/airflow_provider_opensysml/__init__.py`, and move the `Unreleased` section of
    `CHANGELOG.md` under `## X.Y.Z - YYYY-MM-DD`.
-2. Optionally rehearse: run the `release` workflow by hand (`workflow_dispatch`). It builds
+2. Optionally rehearse: run the `publish` workflow by hand (`workflow_dispatch`). It builds
    the sdist and wheel, runs the unit tests against the installed wheel and uploads to
    TestPyPI.
 3. Tag the release commit `vX.Y.Z` and push the tag. The workflow refuses a tag that
