@@ -314,8 +314,8 @@ by the `publish` workflow, through
 [trusted publishing](https://docs.pypi.org/trusted-publishers/): PyPI trusts the workflow
 `publish.yml` of this repository in the GitHub environment `pypi` (and TestPyPI the
 environment `testpypi`), so no token is stored. Every upload goes through that one
-workflow file: PyPI records the publishing workflow in each file's provenance, and a
-project whose publisher changes between uploads fails its checks.
+workflow file, so the publisher PyPI records in each file's provenance stays the same from
+one upload to the next.
 
 1. Set the version in `project.version` of `pyproject.toml` and `__version__` of
    `src/airflow_provider_opensysml/__init__.py`, and move the `Unreleased` section of
