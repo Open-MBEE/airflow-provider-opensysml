@@ -28,3 +28,6 @@ All notable changes to this provider are recorded here. The format follows
 
 - Requires `opensysml` 0.11.0 or later, the first release carrying graph export and the
   verification questions, so no OpenSysML source build is needed.
+- Requires `apache-airflow` 3.3.2 or later, and `apache-airflow-providers-cncf-kubernetes`
+  10.17.0 or later for the `kubernetes` extra: the lowest releases with no published
+  security advisory (earlier ones include CVE-2026-82355 and CVE-2026-27173).

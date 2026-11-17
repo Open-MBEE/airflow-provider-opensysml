@@ -19,8 +19,8 @@ Airflow **asset**, and its analysis and verification cases are **tasks**:
   client — an externally managed one named by an Airflow connection, or a
   private one started for the task.
 
-Requires Airflow 3.0 or later (asset watchers are an Airflow 3 feature) and
-Python 3.10 or later.
+Requires Airflow 3.3.2 or later (asset watchers are an Airflow 3 feature; earlier
+3.x releases carry published security advisories) and Python 3.10 or later.
 
 ## Install
 
