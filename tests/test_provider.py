@@ -37,5 +37,11 @@ def test_providers_manager_discovers_hook_and_trigger():
     manager = ProvidersManager()
     if "airflow-provider-opensysml" not in manager.providers:
         pytest.skip("package not installed")
-    assert "opensysml" in manager.hooks
+    try:  # Airflow 3.2 moved hook discovery to the task SDK and deprecated ProvidersManager.hooks
+        from airflow.sdk.providers_manager_runtime import ProvidersManagerTaskRuntime
+    except ImportError:
+        hooks = manager.hooks
+    else:
+        hooks = ProvidersManagerTaskRuntime().hooks
+    assert "opensysml" in hooks
     assert "airflow_provider_opensysml.triggers.model" in [t.trigger_class_name for t in manager.trigger]
