@@ -13,18 +13,30 @@ requires-python = ">=3.10"
 authors = [{ name = "OpenMBEE" }]
 keywords = ["airflow", "provider", "sysml", "sysml v2", "mbse", "opensysml"]
 classifiers = [
+    "Development Status :: 4 - Beta",
     "Framework :: Apache Airflow",
     "Framework :: Apache Airflow :: Provider",
+    "Intended Audience :: Developers",
+    "Intended Audience :: Science/Research",
+    "Operating System :: OS Independent",
     "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3 :: Only",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Programming Language :: Python :: 3.14",
     "Topic :: Scientific/Engineering",
+    "Topic :: System :: Monitoring",
+    "Typing :: Typed",
 ]
 dependencies = [
-    "apache-airflow>=3.0.0",
-    "opensysml>=0.11.0",
+    "apache-airflow>=3.2.0",
+    "opensysml>=0.12.0",
 ]
 
 [project.optional-dependencies]
-kubernetes = ["apache-airflow-providers-cncf-kubernetes>=8.0.0"]
+kubernetes = ["apache-airflow-providers-cncf-kubernetes>=10.0.0"]
 dev = [
     "build>=1.2",
     "twine>=5",
@@ -32,11 +44,13 @@ dev = [
     "pytest-asyncio>=0.23",
     "ruff>=0.6",
     "mypy>=1.10",
-    "apache-airflow-providers-cncf-kubernetes>=8.0.0",
+    "apache-airflow-providers-cncf-kubernetes>=10.0.0",
 ]
 
 [project.urls]
 Homepage = "https://github.com/Open-MBEE/airflow-provider-opensysml"
+Source = "https://github.com/Open-MBEE/airflow-provider-opensysml"
+Issues = "https://github.com/Open-MBEE/airflow-provider-opensysml/issues"
 OpenSysML = "https://github.com/Open-MBEE/OpenSysML"
 Changelog = "https://github.com/Open-MBEE/airflow-provider-opensysml/blob/develop/CHANGELOG.md"
 
@@ -45,6 +59,9 @@ provider_info = "airflow_provider_opensysml:get_provider_info"
 
 [tool.setuptools.packages.find]
 where = ["src"]
+
+[tool.setuptools.package-data]
+airflow_provider_opensysml = ["py.typed"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

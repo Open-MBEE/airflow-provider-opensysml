@@ -20,6 +20,9 @@ def verdict(**overrides):
         requirement_id="",
         instance_path="",
         verifications=[],
+        notes=[],
+        witness=[],
+        standing=None,
     )
     base.update(overrides)
     return SimpleNamespace(**base)

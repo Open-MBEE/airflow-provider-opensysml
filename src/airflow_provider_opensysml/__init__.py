@@ -13,7 +13,23 @@ from __future__ import annotations
 
 __version__ = "0.1.0"
 
-__all__ = ["__version__", "get_provider_info"]
+__all__ = ["UI_FIELD_BEHAVIOUR", "__version__", "get_provider_info"]
+
+UI_FIELD_BEHAVIOUR = {
+    "hidden-fields": ["login", "password", "schema"],
+    "relabeling": {"host": "sysml-grpc host", "port": "sysml-grpc port"},
+    "placeholders": {
+        "host": "leave empty to start a private service",
+        "port": "50051",
+        "extra": '{"version": "v0.12.0", "require_capabilities": ["verification"]}',
+    },
+}
+"""The connection form's fields, read from here by Airflow 3.2 and later.
+
+Airflow 3.2 moved the form's behaviour from the hook's ``get_ui_field_behaviour``
+to the provider manifest and no longer reads the hook's without
+``flask-appbuilder``; older Airflow reads the hook's and ignores this key.
+"""
 
 
 def get_provider_info() -> dict:
@@ -34,6 +50,7 @@ def get_provider_info() -> dict:
             {
                 "connection-type": "opensysml",
                 "hook-class-name": "airflow_provider_opensysml.hooks.opensysml.OpenSysMLHook",
+                "ui-field-behaviour": UI_FIELD_BEHAVIOUR,
             }
         ],
         "hooks": [

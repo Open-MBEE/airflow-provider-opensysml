@@ -19,8 +19,7 @@ Airflow **asset**, and its analysis and verification cases are **tasks**:
   client — an externally managed one named by an Airflow connection, or a
   private one started for the task.
 
-Requires Airflow 3.0 or later (asset watchers are an Airflow 3 feature) and
-Python 3.10 or later.
+Requires Airflow 3.2 or later and Python 3.10 or later.
 
 ## Install
 
@@ -28,9 +27,9 @@ Python 3.10 or later.
 pip install airflow-provider-opensysml
 ```
 
-The provider needs `opensysml` 0.11.0 or later, the first release whose client and
-service carry graph export and the verification questions the provider asks; `pip`
-installs it. The `opensysml` client resolves its `sysml-grpc` binary as its
+The provider needs `opensysml` 0.12.0 or later — graph export, the verification
+questions the provider asks, and the `tolerate` argument of the document queries the
+examples use; `pip` installs it. The `opensysml` client resolves its `sysml-grpc` binary as its
 documentation describes: `$OPENSYSML_BINARY`, then its cache, then a download of the
 release it pins. Point `OPENSYSML_BINARY` at a build, or set up an `opensysml`
 connection naming a running service, to avoid the download on workers.
@@ -282,7 +281,7 @@ traceability matrix.
 ### Against an unreleased OpenSysML
 
 The provider is tested against the released `opensysml` and, as an early warning, against
-OpenSysML's `develop` branch. To run it against a checkout yourself (Go 1.25 or later):
+OpenSysML's `develop` branch. To run it against a checkout yourself (the Go version its `go.mod` names):
 
 ```sh
 git clone --branch develop https://github.com/Open-MBEE/OpenSysML.git
@@ -296,22 +295,38 @@ export OPENSYSML_BINARY=$PWD/bin/sysml-grpc   # the client uses this build inste
 ```sh
 pip install -e ".[dev]"
 ruff check . && ruff format --check .
+mypy src
 pytest -m "not integration"                 # no service needed
 pytest                                      # the operator and live-export tests against a real service
 ```
 
 The integration tests start a private `sysml-grpc` the way a task does, so they run
 against the release the installed `opensysml` pins, or against `$OPENSYSML_BINARY` when it
-is set. CI runs the whole suite against the released client on Python 3.10 and 3.12, and
-against OpenSysML `develop` as an early warning that does not block a change here.
+is set. CI runs the whole suite against the released client on Python 3.10 through 3.14, once
+more on the lowest Airflow, `opensysml` and Kubernetes provider versions `pyproject.toml`
+admits, and against OpenSysML `develop` as an early warning that does not block a change
+here.
 
 ### Releasing
 
-A release is a tag `vX.Y.Z` whose version matches `project.version` in
-`pyproject.toml` and `__version__` in `src/airflow_provider_opensysml/__init__.py`; the
-`release` workflow builds the sdist and wheel, checks them, and publishes to PyPI through
-[trusted publishing](https://docs.pypi.org/trusted-publishers/). Move the `Unreleased`
-section of `CHANGELOG.md` under the version first.
+The provider is published to [PyPI](https://pypi.org/project/airflow-provider-opensysml/)
+by the `publish` workflow, through
+[trusted publishing](https://docs.pypi.org/trusted-publishers/): PyPI trusts the workflow
+`publish.yml` of this repository in the GitHub environment `pypi` (and TestPyPI the
+environment `testpypi`), so no token is stored. Every upload goes through that one
+workflow file, so the publisher PyPI records in each file's provenance stays the same from
+one upload to the next.
+
+1. Set the version in `project.version` of `pyproject.toml` and `__version__` of
+   `src/airflow_provider_opensysml/__init__.py`, and move the `Unreleased` section of
+   `CHANGELOG.md` under `## X.Y.Z - YYYY-MM-DD`.
+2. Optionally rehearse: run the `publish` workflow by hand (`workflow_dispatch`). It builds
+   the sdist and wheel, runs the unit tests against the installed wheel and uploads to
+   TestPyPI.
+3. Tag the release commit `vX.Y.Z` and push the tag. The workflow refuses a tag that
+   disagrees with the version or has no changelog section, then builds, tests the wheel,
+   publishes to PyPI and opens a GitHub release carrying the changelog section and the
+   two files.
 
 ## License
 
