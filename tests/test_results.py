@@ -37,6 +37,13 @@ def _verdict(**overrides):
                 case_id="R::check", kind="pass", detail="", subcase=False, requirement_id="R::mass"
             )
         ],
+        notes=[SimpleNamespace(kind="assumed_one", subject="R::mass", text="mass read as one")],
+        witness=[
+            SimpleNamespace(
+                feature="R::mass", value=SimpleNamespace(magnitude=3.0, unit="kg"), unit="kg", exact="3"
+            )
+        ],
+        standing=SimpleNamespace(engine="run", strength="observed", bounds=[]),
     )
     base.update(overrides)
     return SimpleNamespace(**base)
@@ -48,7 +55,16 @@ def test_verdict_to_dict_is_json():
     assert report["verifications"] == [
         {"case": "R::check", "kind": "pass", "detail": "", "subcase": False, "requirement": "R::mass"}
     ]
+    assert report["notes"] == [{"kind": "assumed_one", "subject": "R::mass", "text": "mass read as one"}]
+    assert report["witness"] == [
+        {"feature": "R::mass", "value": {"magnitude": 3.0, "unit": "kg"}, "unit": "kg", "exact": "3"}
+    ]
+    assert report["standing"] == {"engine": "run", "strength": "observed", "bounds": []}
     json.dumps(report)
+
+
+def test_verdict_to_dict_without_standing():
+    assert verdict_to_dict(_verdict(standing=None))["standing"] is None
 
 
 def test_analysis_result_to_dict_is_json():

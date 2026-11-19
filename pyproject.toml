@@ -20,7 +20,7 @@ classifiers = [
 ]
 dependencies = [
     "apache-airflow>=3.0.0",
-    "opensysml>=0.11.0",
+    "opensysml>=0.12.0",
 ]
 
 [project.optional-dependencies]

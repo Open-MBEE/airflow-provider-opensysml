@@ -373,7 +373,8 @@ package TerrainNCAM {
                     source = WhereType(source = OwnedElements(source = Pipeline::Terrain), type = "ActionUsage"),
                     'feature' = "cpu",
                     operator = ">=",
-                    value = "0"
+                    value = "0",
+                    tolerate = true
                 ),
                 properties = ("name", "type", "wrapper", "cpu", "memoryGi", "ompThreads")
             )
