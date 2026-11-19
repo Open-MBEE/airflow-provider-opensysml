@@ -28,7 +28,7 @@ pip install airflow-provider-opensysml
 ```
 
 The provider needs `opensysml` 0.12.0 or later — graph export, the verification
-questions the provider asks, and the `tolerate` argument of the document queries the
+questions the provider asks, and the exact `WhereType` and `Differ` document queries the
 examples use; `pip` installs it. The `opensysml` client resolves its `sysml-grpc` binary as its
 documentation describes: `$OPENSYSML_BINARY`, then its cache, then a download of the
 release it pins. Point `OPENSYSML_BINARY` at a build, or set up an `opensysml`
@@ -275,8 +275,8 @@ The example DAG does this for TN-1..TN-10 and, for TN-12 (this run's stereo pair
 adds a `case` sensor bound from `dag_run.conf` before either eye is correlated. The
 same model renders the pipeline description —
 `sysml example_dags/terrain_ncam/terrain_ncam.sysml -render-document TerrainNCAM::Report::TerrainReport -doc-form html -o terrain.html`
-— with the step and product tables, the flow diagram, the requirement text and the
-traceability matrix.
+— with the step and product tables, a comparison of the two eyes' sizing, the flow
+diagram, the requirement text and the traceability matrix.
 
 ### Against an unreleased OpenSysML
 

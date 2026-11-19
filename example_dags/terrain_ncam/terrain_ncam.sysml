@@ -67,17 +67,17 @@ package TerrainNCAM {
         action def Radiometric :> VicarStep {
             doc /* marsrad: radiometric correction of one eye's FDR into its RAS. */
             attribute :>> wrapper = "rad_wrapper.sh";
-            attribute :>> cpu = 1;
-            attribute :>> memoryGi = 1;
+            attribute :>> cpu default = 1;
+            attribute :>> memoryGi default = 1;
             in fdr : FDR;
             out ras : RAS;
         }
         action def Correlate :> VicarStep {
             doc /* marsecorr + marscor3: the disparity of this eye's RAS against the other eye's, OpenMP across two threads. */
             attribute :>> wrapper = "correlate_wrapper.sh";
-            attribute :>> cpu = 2;
-            attribute :>> memoryGi = 4;
-            attribute :>> ompThreads = 2;
+            attribute :>> cpu default = 2;
+            attribute :>> memoryGi default = 4;
+            attribute :>> ompThreads default = 2;
             in eye : RAS;
             in other : RAS;
             out disparity : DSP;
@@ -85,8 +85,8 @@ package TerrainNCAM {
         action def XYZ :> VicarStep {
             doc /* marsxyz and its filters: the disparity of one eye into its masked XYZ point cloud. */
             attribute :>> wrapper = "xyz_wrapper.sh";
-            attribute :>> cpu = 1;
-            attribute :>> memoryGi = 3;
+            attribute :>> cpu default = 1;
+            attribute :>> memoryGi default = 3;
             in eye : RAS;
             in other : RAS;
             in disparity : DSP;
@@ -95,8 +95,8 @@ package TerrainNCAM {
         action def MeshStep :> VicarStep {
             doc /* marsmesh: the point cloud and its RAS texture into the terrain mesh and its siblings. */
             attribute :>> wrapper = "mesh_wrapper.sh";
-            attribute :>> cpu = 2;
-            attribute :>> memoryGi = 6;
+            attribute :>> cpu default = 2;
+            attribute :>> memoryGi default = 6;
             in xym : XYM;
             in ras : RAS;
             out mesh : Mesh;
@@ -366,17 +366,25 @@ package TerrainNCAM {
             expose Pipeline::Terrain;
         }
 
-        // The steps of the pipeline: the action usages that carry a pod sizing.
+        // The steps of the pipeline: the action usages themselves, which leaves
+        // out the fork and join nodes between them. Every step must answer
+        // each sizing column, so a step without one fails the query.
+        calc def Steps :> Query {
+            WhereType(source = OwnedElements(source = Pipeline::Terrain), type = "ActionUsage", exact = true)
+        }
         calc def StepTable :> Query {
             Project(
-                source = WhereFeature(
-                    source = WhereType(source = OwnedElements(source = Pipeline::Terrain), type = "ActionUsage"),
-                    'feature' = "cpu",
-                    operator = ">=",
-                    value = "0",
-                    tolerate = true
-                ),
+                source = Steps(),
                 properties = ("name", "type", "wrapper", "cpu", "memoryGi", "ompThreads")
+            )
+        }
+        // The steps whose sizing differs between the eyes, matched by step type.
+        calc def EyeCpuDifference :> Query {
+            Differ(
+                left = Project(source = WhereName(source = Steps(), operator = "endsWith", value = "_left"), properties = ("type", "cpu")),
+                right = Project(source = WhereName(source = Steps(), operator = "endsWith", value = "_right"), properties = ("type", "cpu")),
+                key = "type",
+                column = "cpu"
             )
         }
         calc def ProductTable :> Query {
@@ -413,6 +421,13 @@ package TerrainNCAM {
                 part table : Table {
                     attribute redefines caption = "Pods of the pipeline and their sizing";
                     calc rows : StepTable;
+                }
+                part alike : Paragraph {
+                    attribute redefines text = "Both eyes are meant to be sized alike; the table below lists any step type whose cpu limit differs between them.";
+                }
+                part eyes : Table {
+                    attribute redefines caption = "Step types whose cpu limit differs between the eyes";
+                    calc rows : EyeCpuDifference;
                 }
             }
             part products : Section {
