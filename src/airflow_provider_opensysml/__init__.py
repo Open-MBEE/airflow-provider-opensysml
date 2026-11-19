@@ -24,12 +24,7 @@ UI_FIELD_BEHAVIOUR = {
         "extra": '{"version": "v0.12.0", "require_capabilities": ["verification"]}',
     },
 }
-"""The connection form's fields, read from here by Airflow 3.2 and later.
-
-Airflow 3.2 moved the form's behaviour from the hook's ``get_ui_field_behaviour``
-to the provider manifest and no longer reads the hook's without
-``flask-appbuilder``; older Airflow reads the hook's and ignores this key.
-"""
+"""The connection form's fields, which Airflow reads from the provider manifest."""
 
 
 def get_provider_info() -> dict:
