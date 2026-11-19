@@ -31,12 +31,12 @@ classifiers = [
     "Typing :: Typed",
 ]
 dependencies = [
-    "apache-airflow>=3.2.0",
+    "apache-airflow>=3.3.2",
     "opensysml>=0.12.0",
 ]
 
 [project.optional-dependencies]
-kubernetes = ["apache-airflow-providers-cncf-kubernetes>=10.0.0"]
+kubernetes = ["apache-airflow-providers-cncf-kubernetes>=10.17.0"]
 dev = [
     "build>=1.2",
     "twine>=5",
@@ -44,7 +44,7 @@ dev = [
     "pytest-asyncio>=0.23",
     "ruff>=0.6",
     "mypy>=1.10",
-    "apache-airflow-providers-cncf-kubernetes>=10.0.0",
+    "apache-airflow-providers-cncf-kubernetes>=10.17.0",
 ]
 
 [project.urls]
