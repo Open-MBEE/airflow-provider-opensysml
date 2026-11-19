@@ -189,9 +189,10 @@ def gate_concerns(model: Any, gate: RequirementGate, subject: str) -> bool:
 
 def load_gates(source: str | Path | Sequence[Mapping[str, Any]]) -> list[RequirementGate]:
     """Gates from the list :func:`gates_of_model` found, or a JSON file holding it."""
-    if isinstance(source, (str, Path)):
-        source = json.loads(Path(source).read_text())
-    return [RequirementGate.from_dict(gate) for gate in source]
+    gates: Sequence[Mapping[str, Any]] = (
+        json.loads(Path(source).read_text()) if isinstance(source, (str, Path)) else source
+    )
+    return [RequirementGate.from_dict(gate) for gate in gates]
 
 
 GateFactory = Callable[[RequirementGate, "DAG"], "BaseOperator"]
@@ -388,9 +389,9 @@ class SysMLActionDag:
         tasks = {step.task_id: self.task_factory(step, dag) for step in self.steps}
         for upstream, downstream in self.dependencies:
             tasks[upstream] >> tasks[downstream]
-        if self.gates and self.gate_factory is None:
-            raise ValueError("gates need a gate_factory to build their tasks")
         for gate in self.gates:
+            if self.gate_factory is None:
+                raise ValueError("gates need a gate_factory to build their tasks")
             task = self.gate_factory(gate, dag)
             tasks[task.task_id] = task
             for task_id in self.gated_steps(gate):
