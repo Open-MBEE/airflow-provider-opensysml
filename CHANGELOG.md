@@ -41,6 +41,6 @@ All notable changes to this provider are recorded here. The format follows
   assignment of a violated or satisfiable question and the engine's `standing`, which
   OpenSysML 0.12.0 reports beside each verdict.
 - The `opensysml` connection form's hidden fields, labels and placeholders are declared in
-  the provider manifest (`ui-field-behaviour`), which Airflow 3.2 and later read; the hook's
-  `get_ui_field_behaviour` stays for older Airflow. Airflow 3.2 stopped reading the hook's
-  without `flask-appbuilder`, which left the form generic.
+  the provider manifest (`ui-field-behaviour`), which Airflow 3.2 and later read. The hook
+  defines no `get_ui_field_behaviour`: Airflow 3.2 deprecated it and stopped reading it
+  without `flask-appbuilder`.

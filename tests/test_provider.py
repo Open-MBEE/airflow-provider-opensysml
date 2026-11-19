@@ -21,11 +21,6 @@ def test_provider_info_names_importable_modules():
     hook = getattr(importlib.import_module(module), cls)
     assert hook.conn_type == conn["connection-type"] == "opensysml"
     assert conn["ui-field-behaviour"] is UI_FIELD_BEHAVIOUR
-    assert hook.get_ui_field_behaviour() == {
-        "hidden_fields": UI_FIELD_BEHAVIOUR["hidden-fields"],
-        "relabeling": UI_FIELD_BEHAVIOUR["relabeling"],
-        "placeholders": UI_FIELD_BEHAVIOUR["placeholders"],
-    }
 
 
 def test_entry_point_registered():
