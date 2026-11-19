@@ -7,6 +7,8 @@ from typing import TYPE_CHECKING, Any
 from airflow.sdk import BaseHook
 from airflow.sdk.exceptions import AirflowNotFoundException
 
+from airflow_provider_opensysml import UI_FIELD_BEHAVIOUR
+
 if TYPE_CHECKING:
     from opensysml import Connection, Model
 
@@ -37,14 +39,11 @@ class OpenSysMLHook(BaseHook):
 
     @classmethod
     def get_ui_field_behaviour(cls) -> dict[str, Any]:
+        """The connection form for Airflow before 3.2, which reads it from the hook."""
         return {
-            "hidden_fields": ["login", "password", "schema"],
-            "relabeling": {"host": "sysml-grpc host", "port": "sysml-grpc port"},
-            "placeholders": {
-                "host": "leave empty to start a private service",
-                "port": "50051",
-                "extra": '{"version": "v0.9.2", "require_capabilities": ["verification"]}',
-            },
+            "hidden_fields": UI_FIELD_BEHAVIOUR["hidden-fields"],
+            "relabeling": UI_FIELD_BEHAVIOUR["relabeling"],
+            "placeholders": UI_FIELD_BEHAVIOUR["placeholders"],
         }
 
     def _connection_settings(self) -> tuple[str | None, int | None, dict[str, Any]]:

@@ -7,7 +7,7 @@ on:
 
 jobs:
   test:
-    name: test (${{ matrix.python-version }}, opensysml ${{ matrix.opensysml }})
+    name: test (${{ matrix.python-version }}, opensysml ${{ matrix.opensysml }}${{ matrix.pins && ', lowest' || '' }})
     runs-on: ubuntu-latest
     # The develop job is an early warning that OpenSysML's next release moves
     # something the provider or its examples rely on; it does not block a change here.
@@ -15,11 +15,17 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        python-version: ["3.10", "3.12"]
+        python-version: ["3.10", "3.11", "3.12", "3.13", "3.14"]
         opensysml: [release]
+        pins: [""]
         include:
+          # The lowest versions pyproject.toml admits, so the declared floors stay true.
+          - python-version: "3.10"
+            opensysml: release
+            pins: apache-airflow==3.3.2 opensysml==0.12.0 apache-airflow-providers-cncf-kubernetes==10.17.0
           - python-version: "3.12"
             opensysml: develop
+            pins: ""
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
@@ -29,7 +35,7 @@ jobs:
       - name: Install
         run: |
           python -m pip install --upgrade pip
-          pip install -e ".[dev]"
+          pip install -e ".[dev]" ${{ matrix.pins }}
       # The released client downloads the sysml-grpc it pins; the sysml CLI the
       # model checks use comes from the same release.
       - name: Install the released sysml CLI
@@ -44,7 +50,7 @@ jobs:
       - uses: actions/setup-go@v5
         if: matrix.opensysml == 'develop'
         with:
-          go-version: "1.25"
+          go-version: "stable"
       - name: Build OpenSysML develop
         if: matrix.opensysml == 'develop'
         run: |
@@ -57,6 +63,8 @@ jobs:
           echo "$RUNNER_TEMP/OpenSysML/bin" >> "$GITHUB_PATH"
       - name: Lint
         run: ruff check . && ruff format --check .
+      - name: Type check
+        run: mypy src
       - name: Model checks
         run: |
           sysml -version
@@ -74,4 +82,4 @@ jobs:
         if: matrix.opensysml == 'release'
         run: |
           python -m build
-          twine check dist/*
+          twine check --strict dist/*
