@@ -28,7 +28,7 @@ advisories) and Python 3.10 or later.
 pip install airflow-provider-opensysml
 ```
 
-The provider needs `opensysml` 0.12.0 or later — graph export, the verification
+The provider needs `opensysml` 0.12.1 or later — graph export, the verification
 questions the provider asks, and the `tolerate` argument of the document queries the
 examples use; `pip` installs it. The `opensysml` client resolves its `sysml-grpc` binary as its
 documentation describes: `$OPENSYSML_BINARY`, then its cache, then a download of the

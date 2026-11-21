@@ -21,7 +21,7 @@ UI_FIELD_BEHAVIOUR = {
     "placeholders": {
         "host": "leave empty to start a private service",
         "port": "50051",
-        "extra": '{"version": "v0.12.0", "require_capabilities": ["verification"]}',
+        "extra": '{"version": "v0.12.1", "require_capabilities": ["verification"]}',
     },
 }
 """The connection form's fields, read from here by Airflow 3.2 and later.
