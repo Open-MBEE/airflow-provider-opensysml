@@ -38,8 +38,7 @@ from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:
-    from airflow.models.baseoperator import BaseOperator
-    from airflow.sdk import DAG
+    from airflow.sdk import DAG, BaseOperator
 
 __all__ = [
     "GRAPHS_VERSION",
