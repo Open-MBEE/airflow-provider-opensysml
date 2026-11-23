@@ -103,10 +103,6 @@ def _eye(task_id: str) -> str:
     return task_id.rsplit("_", 1)[-1]
 
 
-def _other(eye: str) -> str:
-    return "right" if eye == "left" else "left"
-
-
 def fdr_key(eye: str) -> str:
     return f"{{{{ dag_run.conf['{eye}_key'] }}}}"
 
