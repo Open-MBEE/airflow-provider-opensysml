@@ -19,7 +19,8 @@ Airflow **asset**, and its analysis and verification cases are **tasks**:
   client — an externally managed one named by an Airflow connection, or a
   private one started for the task.
 
-Requires Airflow 3.2 or later and Python 3.10 or later.
+Requires Airflow 3.3.2 or later (earlier 3.x releases carry published security
+advisories) and Python 3.10 or later.
 
 ## Install
 
@@ -27,7 +28,7 @@ Requires Airflow 3.2 or later and Python 3.10 or later.
 pip install airflow-provider-opensysml
 ```
 
-The provider needs `opensysml` 0.12.0 or later — graph export, the verification
+The provider needs `opensysml` 0.12.1 or later — graph export, the verification
 questions the provider asks, and the `tolerate` argument of the document queries the
 examples use; `pip` installs it. The `opensysml` client resolves its `sysml-grpc` binary as its
 documentation describes: `$OPENSYSML_BINARY`, then its cache, then a download of the
